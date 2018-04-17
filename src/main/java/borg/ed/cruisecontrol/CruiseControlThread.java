@@ -49,6 +49,7 @@ public class CruiseControlThread extends Thread {
 	private int xPercent = 0;
 	private int yPercent = 0;
 	private boolean hollow = false;
+	private float brightnessAhead = 0;
 	private long lastTick = System.currentTimeMillis();
 
 	private static final int STAR_IN_FRONT_REGION_X = 926 - 40;
@@ -139,6 +140,7 @@ public class CruiseControlThread extends Thread {
 				}
 				// <<<< SCREEN CAPTURE <<<<
 
+				brightnessAhead = this.computeBrightnessAhead(brightImage);
 				impactMatch = null; //locateImpact(redHudImage);
 				starInFront = this.isCloseToStarInFront(redHudImage);
 				if (gameState == GameState.UNKNOWN || gameState == GameState.COMPASS_ALIGNING_JUMP || gameState == GameState.COMPASS_ALIGNING_STAR
@@ -303,6 +305,49 @@ public class CruiseControlThread extends Thread {
 		}
 
 		logger.info(this.getName() + " stopped");
+	}
+
+	private float computeBrightnessAhead(GrayF32 brightImage) {
+		// Upper 2/3 of the screen
+		int stepX = (int) (brightImage.width / 32.0f);
+		int offX = stepX / 2;
+		int stepY = (int) (brightImage.height / 18.0f);
+		int offY = stepY / 2;
+
+		float total = 32.0f * 12.0f;
+		float bright = 0.0f;
+
+		for (int x = 0; x < 32; x++) {
+			for (int y = 0; y < 12; y++) {
+				int myX = offX + x * stepX;
+				int myY = offY + y * stepY;
+				if (brightImage.unsafe_get(myX, myY) > 0) {
+					bright++;
+				}
+			}
+		}
+
+		// Center 20% square of the screen
+		int squareSize = brightImage.height / 5;
+		stepX = squareSize / 10;
+		offX = (brightImage.width / 2) - (int) (4.5f * stepX);
+		stepY = squareSize / 10;
+		offY = (brightImage.height / 2) - (int) (4.5f * stepY);
+
+		total += 10.0f * 10.0f;
+
+		for (int x = 0; x < 10; x++) {
+			for (int y = 0; y < 10; y++) {
+				int myX = offX + x * stepX;
+				int myY = offY + y * stepY;
+				if (brightImage.unsafe_get(myX, myY) > 0) {
+					bright++;
+				}
+			}
+		}
+
+		// Result
+		return bright / total;
 	}
 
 	private void honkAndSelect() {
@@ -611,6 +656,15 @@ public class CruiseControlThread extends Thread {
 			g.setColor(new Color(255, 127, 0));
 			g.drawRect(cruise30kmsMatch.getX(), cruise30kmsMatch.getY(), cruise30kmsMatch.getWidth(), cruise30kmsMatch.getHeight());
 			g.drawString(String.format(Locale.US, "%.4f", cruise30kmsMatch.getErrorPerPixel()), cruise30kmsMatch.getX(), cruise30kmsMatch.getY());
+		}
+
+		g.setColor(Color.BLACK);
+		g.fillRect(debugImage.getWidth() - 20, 0, 20, debugImage.getHeight());
+		if (brightnessAhead > 0) {
+			int brightnessRed = 127 + (int) (128.0f * brightnessAhead);
+			int brightnessHeight = (int) (brightnessAhead * debugImage.getHeight());
+			g.setColor(new Color(brightnessRed, 127, 127));
+			g.fillRect(debugImage.getWidth() - 20, debugImage.getHeight() - brightnessHeight, 20, brightnessHeight);
 		}
 
 		long millis = System.currentTimeMillis() - this.lastTick;
