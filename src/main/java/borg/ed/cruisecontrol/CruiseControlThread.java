@@ -111,6 +111,7 @@ public class CruiseControlThread extends Thread {
 		GrayF32 orangeHudImage = new GrayF32(CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
 		GrayF32 blueWhiteHudImage = orangeHudImage.createSameShape();
 		GrayF32 redHudImage = orangeHudImage.createSameShape();
+		GrayF32 brightImage = orangeHudImage.createSameShape();
 		BufferedImage debugImage = new BufferedImage(CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT, BufferedImage.TYPE_INT_RGB);
 
 		while (!Thread.currentThread().isInterrupted()) {
@@ -131,6 +132,7 @@ public class CruiseControlThread extends Thread {
 						orangeHudImage = screenConverterResult.getOrangeHudImage().clone();
 						blueWhiteHudImage = screenConverterResult.getBlueWhiteHudImage().clone();
 						redHudImage = screenConverterResult.getRedHudImage().clone();
+						brightImage = screenConverterResult.getBrightImage().clone();
 					} catch (InterruptedException e) {
 						break;
 					}
@@ -187,7 +189,7 @@ public class CruiseControlThread extends Thread {
 				// >>>> DEBUG IMAGE >>>>
 				//ConvertBufferedImage.convertTo(orangeHudImage, debugImage);
 
-				this.drawColoredDebugImage(debugImage, orangeHudImage, blueWhiteHudImage, redHudImage);
+				this.drawColoredDebugImage(debugImage, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
 				this.drawDebugInfoOnImage(debugImage, compassDotMatch, hollow);
 
 				for (DebugImageListener listener : this.debugImageListeners) {
@@ -625,18 +627,21 @@ public class CruiseControlThread extends Thread {
 		g.dispose();
 	}
 
-	private void drawColoredDebugImage(BufferedImage debugImage, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage) {
+	private void drawColoredDebugImage(BufferedImage debugImage, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
 		for (int y = 0; y < debugImage.getHeight(); y++) {
 			for (int x = 0; x < debugImage.getWidth(); x++) {
 				float r = redHudImage.unsafe_get(x, y);
 				float bw = blueWhiteHudImage.unsafe_get(x, y);
 				float o = orangeHudImage.unsafe_get(x, y);
+				float b = brightImage.unsafe_get(x, y);
 				if (r > 0) {
 					debugImage.setRGB(x, y, new Color((int) r, (int) (r * 0.15f), (int) (r * 0.15f)).getRGB());
 				} else if (bw > 0) {
 					debugImage.setRGB(x, y, new Color((int) (bw * 0.66f), (int) (bw * 0.66f), (int) bw).getRGB());
 				} else if (o > 0) {
 					debugImage.setRGB(x, y, new Color((int) o, (int) (o * 0.5f), 0).getRGB());
+				} else if (b > 0) {
+					debugImage.setRGB(x, y, new Color((int) b, (int) b, (int) b).getRGB());
 				} else {
 					debugImage.setRGB(x, y, new Color(0, 0, 0).getRGB());
 				}

@@ -7,6 +7,7 @@ public class ScreenConverterResult {
 	private GrayF32 orangeHudImage = null;
 	private GrayF32 blueWhiteHudImage = null;
 	private GrayF32 redHudImage = null;
+	private GrayF32 brightImage = null;
 
 	public GrayF32 getOrangeHudImage() {
 		return orangeHudImage;
@@ -30,6 +31,14 @@ public class ScreenConverterResult {
 
 	public void setRedHudImage(GrayF32 redHudImage) {
 		this.redHudImage = redHudImage;
+	}
+
+	public GrayF32 getBrightImage() {
+		return brightImage;
+	}
+
+	public void setBrightImage(GrayF32 brightImage) {
+		this.brightImage = brightImage;
 	}
 
 }

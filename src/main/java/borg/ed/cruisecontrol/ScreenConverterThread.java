@@ -33,6 +33,7 @@ public class ScreenConverterThread extends Thread {
 		GrayF32 orangeHudImage = new GrayF32(CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
 		GrayF32 blueWhiteHudImage = orangeHudImage.createSameShape();
 		GrayF32 redHudImage = orangeHudImage.createSameShape();
+		GrayF32 brightImage = orangeHudImage.createSameShape();
 
 		while (!Thread.currentThread().isInterrupted()) {
 			// Wait for the next (scaled) screen capture and convert it into BoofCV format
@@ -47,13 +48,14 @@ public class ScreenConverterThread extends Thread {
 
 			// Convert into relevant color bands
 			ColorHsv.rgbToHsv_F32(rgb, hsv);
-			this.hsvToHudImages(hsv, orangeHudImage, blueWhiteHudImage, redHudImage);
+			this.hsvToHudImages(hsv, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
 
 			// Notify waiting threads
 			synchronized (this.screenConverterResult) {
 				this.screenConverterResult.setOrangeHudImage(orangeHudImage);
 				this.screenConverterResult.setBlueWhiteHudImage(blueWhiteHudImage);
 				this.screenConverterResult.setRedHudImage(redHudImage);
+				this.screenConverterResult.setBrightImage(brightImage);
 				this.screenConverterResult.notifyAll();
 				logger.debug("Notified waiting threads of new screen conversion result");
 			}
@@ -62,7 +64,7 @@ public class ScreenConverterThread extends Thread {
 		logger.info(this.getName() + " stopped");
 	}
 
-	private void hsvToHudImages(Planar<GrayF32> hsv, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage) {
+	private void hsvToHudImages(Planar<GrayF32> hsv, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
 		for (int y = 0; y < hsv.height; y++) {
 			for (int x = 0; x < hsv.width; x++) {
 				float h = hsv.bands[0].unsafe_get(x, y);
@@ -91,6 +93,12 @@ public class ScreenConverterThread extends Thread {
 					redHudImage.unsafe_set(x, y, v * v * v * 255);
 				} else {
 					redHudImage.unsafe_set(x, y, 0);
+				}
+
+				if (v >= 1.0f) {
+					brightImage.unsafe_set(x, y, 255);
+				} else {
+					brightImage.unsafe_set(x, y, 0);
 				}
 			}
 		}
