@@ -19,11 +19,18 @@ import org.slf4j.LoggerFactory;
 
 import boofcv.io.image.ConvertBufferedImage;
 import boofcv.struct.image.GrayF32;
-import boofcv.struct.image.Planar;
 import borg.ed.cruisecontrol.templatematching.TemplateMatch;
 import borg.ed.cruisecontrol.templatematching.TemplateMatcher;
+import borg.ed.universe.journal.JournalUpdateListener;
+import borg.ed.universe.journal.Status;
+import borg.ed.universe.journal.StatusUpdateListener;
+import borg.ed.universe.journal.events.AbstractJournalEvent;
+import borg.ed.universe.journal.events.DiscoveryScanEvent;
+import borg.ed.universe.journal.events.FSDJumpEvent;
+import borg.ed.universe.journal.events.FuelScoopEvent;
+import borg.ed.universe.journal.events.StartJumpEvent;
 
-public class CruiseControlThread extends Thread {
+public class CruiseControlThread extends Thread implements JournalUpdateListener, StatusUpdateListener {
 
 	static final Logger logger = LoggerFactory.getLogger(CruiseControlThread.class);
 
@@ -50,6 +57,11 @@ public class CruiseControlThread extends Thread {
 	private int yPercent = 0;
 	private boolean hollow = false;
 	private float brightnessAhead = 0;
+	private boolean scoopingFuel = false;
+	private float fuelLevel = 0;
+	private long inSupercruiseSince = Long.MAX_VALUE;
+	private long inHyperspaceSince = Long.MAX_VALUE; // Timestamp when the FSD was charged and the countdown started
+	private long escapingFromStarSince = Long.MAX_VALUE;
 	private long lastTick = System.currentTimeMillis();
 
 	private static final int STAR_IN_FRONT_REGION_X = 926 - 40;
@@ -143,10 +155,17 @@ public class CruiseControlThread extends Thread {
 				brightnessAhead = this.computeBrightnessAhead(brightImage);
 				impactMatch = null; //locateImpact(redHudImage);
 				starInFront = this.isCloseToStarInFront(redHudImage);
+				compassMatch = null;
+				targetMatch = null;
+				xPercent = 0;
+				yPercent = 0;
 				if (gameState == GameState.UNKNOWN || gameState == GameState.COMPASS_ALIGNING_JUMP || gameState == GameState.COMPASS_ALIGNING_STAR
-						|| gameState == GameState.COMPASS_ALIGNING_ESCAPE || gameState == GameState.COMPASS_ALIGNED_STAR) {
-					compassMatch = locateCompassSmart(orangeHudImage);
+						|| gameState == GameState.COMPASS_ALIGNING_ESCAPE || gameState == GameState.COMPASS_ALIGNED_STAR || gameState == GameState.ALIGN_TO_NEXT_SYSTEM
+						|| gameState == GameState.FSD_CHARGING) {
 					targetMatch = locateTargetSmart(orangeHudImage);
+					if (targetMatch == null) {
+						compassMatch = locateCompassSmart(orangeHudImage);
+					}
 				} else {
 					compassMatch = null;
 					targetMatch = null;
@@ -202,8 +221,96 @@ public class CruiseControlThread extends Thread {
 				switch (this.gameState) {
 				case UNKNOWN:
 					this.shipControl.releaseAllKeys();
-					if (compassMatch != null) {
-						this.gameState = GameState.COMPASS_ALIGNING_JUMP;
+					if (targetMatch != null) {
+						this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+					}
+					break;
+				case FSD_CHARGING:
+					if (this.shipControl.getThrottle() < 100) {
+						this.shipControl.setThrottle(100);
+					}
+					if (targetMatch != null) {
+						this.alignToTargetInHud(targetMatch);
+					} else {
+						this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow);
+					}
+					break;
+				case IN_HYPERSPACE:
+					if (System.currentTimeMillis() - this.inHyperspaceSince > 5000 && this.shipControl.getThrottle() > 0) {
+						this.shipControl.setThrottle(0);
+					}
+					break;
+				case HONKING:
+					if (this.shipControl.getThrottle() > 0) {
+						this.shipControl.setThrottle(0);
+					}
+					break;
+				case GET_IN_SCOOPING_RANGE:
+					if (this.shipControl.getThrottle() != 25) {
+						this.shipControl.setThrottle(25);
+					}
+					if (this.scoopingFuel) {
+						this.shipControl.setThrottle(0);
+						this.gameState = GameState.SCOOPING_FUEL;
+					}
+					break;
+				case SCOOPING_FUEL:
+					if (this.fuelLevel >= CruiseControlApplication.MAX_FUEL) {
+						this.gameState = GameState.ALIGN_TO_STAR_ESCAPE;
+					}
+					break;
+				case ALIGN_TO_STAR_ESCAPE:
+					if (this.brightnessAhead > 0.1f) {
+						this.shipControl.setPitchDown(100);
+					} else {
+						this.shipControl.stopTurning();
+						this.gameState = GameState.ESCAPE_FROM_STAR_SLOW;
+					}
+					break;
+				case ESCAPE_FROM_STAR_SLOW:
+					if (this.shipControl.getThrottle() != 25) {
+						this.shipControl.setThrottle(25);
+					}
+					if (this.brightnessAhead > 0.1f) {
+						this.shipControl.setPitchDown(100);
+					} else {
+						this.shipControl.stopTurning();
+					}
+					if (!this.scoopingFuel) {
+						this.gameState = GameState.ESCAPE_FROM_STAR_FASTER;
+						this.escapingFromStarSince = System.currentTimeMillis();
+					}
+					break;
+				case ESCAPE_FROM_STAR_FASTER:
+					if (this.shipControl.getThrottle() != 75) {
+						this.shipControl.setThrottle(75);
+					}
+					if (this.brightnessAhead > 0.1f) {
+						this.shipControl.setPitchDown(100);
+					} else {
+						this.shipControl.stopTurning();
+					}
+					if (System.currentTimeMillis() - this.escapingFromStarSince > 10000) {
+						this.shipControl.setThrottle(100);
+						this.shipControl.selectNextSystemInRoute();
+						this.escapingFromStarSince = Long.MAX_VALUE;
+						this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+					}
+					break;
+				case ALIGN_TO_NEXT_SYSTEM:
+					if (this.shipControl.getThrottle() < 100) {
+						this.shipControl.setThrottle(100);
+					}
+					if (targetMatch != null) {
+						if (this.alignToTargetInHud(targetMatch)) {
+							this.shipControl.toggleFsd();
+							this.gameState = GameState.FSD_CHARGING;
+						}
+					} else {
+						if (this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow)) {
+							this.shipControl.toggleFsd();
+							this.gameState = GameState.FSD_CHARGING;
+						}
 					}
 					break;
 				case COMPASS_ALIGNING_JUMP:
@@ -286,16 +393,15 @@ public class CruiseControlThread extends Thread {
 					}
 					break;
 				default:
-					// Honk: 6s
+					logger.error("Unknown game state " + this.gameState);
 					this.shipControl.fullStop();
 					System.exit(-1);
 					break;
 				}
 
-				logger.debug("Finished processing HUD images");
 				long millis = System.currentTimeMillis() - this.lastTick;
 				double fps = 1000.0 / Math.max(1, millis);
-				System.out.println(String.format(Locale.US, "%6.1f", fps));
+				//				System.out.println(String.format(Locale.US, "%6.1f", fps));
 				//			} catch (InterruptedException e) {
 				//				break; // Quit
 			} catch (Exception e) {
@@ -374,6 +480,52 @@ public class CruiseControlThread extends Thread {
 				}
 			}
 		}).start();
+	}
+
+	private boolean alignToTargetInHud(TemplateMatch hudMatch) {
+		if (hudMatch == null) {
+			this.shipControl.stopTurning();
+		} else {
+			int x = (hudMatch.getX() + hudMatch.getWidth() / 2);
+			int y = (hudMatch.getY() + hudMatch.getHeight() / 2);
+			xPercent = (x * 100) / CruiseControlApplication.SCALED_WIDTH;
+			yPercent = (y * 100) / CruiseControlApplication.SCALED_HEIGHT;
+
+			if (xPercent >= 48 && xPercent <= 52 && yPercent >= 48 && yPercent <= 52) {
+				return true;
+			}
+
+			// Controlled pitch
+			if (yPercent < 50) {
+				if (yPercent < 25) {
+					this.shipControl.setPitchUp(100);
+				} else {
+					this.shipControl.setPitchUp(Math.max(10, (50 - yPercent) * 2));
+				}
+			} else {
+				if (yPercent > 75) {
+					this.shipControl.setPitchDown(100);
+				} else {
+					this.shipControl.setPitchDown(Math.max(10, (yPercent - 50) * 2));
+				}
+			}
+			// Roll to target
+			if (xPercent < 50) {
+				if (xPercent < 45) {
+					this.shipControl.setYawLeft(100);
+				} else {
+					this.shipControl.setYawLeft(Math.max(25, (50 - xPercent) * 2));
+				}
+			} else {
+				if (xPercent > 55) {
+					this.shipControl.setYawRight(100);
+				} else {
+					this.shipControl.setYawRight(Math.max(25, (xPercent - 50) * 2));
+				}
+			}
+		}
+
+		return false;
 	}
 
 	private boolean alignToTargetInCompass(TemplateMatch compassMatch, TemplateMatch compassDotMatch, boolean hollow) {
@@ -498,12 +650,12 @@ public class CruiseControlThread extends Thread {
 			for (int y = STAR_IN_FRONT_REGION_Y; y < STAR_IN_FRONT_REGION_Y + STAR_IN_FRONT_REGION_HEIGHT; y++) {
 				total += redHudImage.unsafe_get(x, y) / 255f;
 				if (total >= 500f) {
-					System.out.println(total);
+					//					System.out.println(total);
 					return true;
 				}
 			}
 		}
-		System.out.println(total);
+		//		System.out.println(total);
 		return false;
 	}
 
@@ -577,40 +729,6 @@ public class CruiseControlThread extends Thread {
 		}
 	}
 
-	private void hsvToHudImages(Planar<GrayF32> hsv, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage) {
-		for (int y = 0; y < hsv.height; y++) {
-			for (int x = 0; x < hsv.width; x++) {
-				float h = hsv.bands[0].unsafe_get(x, y);
-				float s = hsv.bands[1].unsafe_get(x, y);
-				float v = hsv.bands[2].unsafe_get(x, y) / 255f;
-
-				if ((s > 0.70f) && (v >= 0.50f) && (h >= 0.25f && h < 1.00f)) {
-					// Orange
-					orangeHudImage.unsafe_set(x, y, v * 255);
-				} else {
-					orangeHudImage.unsafe_set(x, y, 0);
-				}
-
-				if (v >= 0.75f && s < 0.15f) {
-					// White
-					blueWhiteHudImage.unsafe_set(x, y, v * v * 255);
-				} else if ((h > 3.14f && h < 3.84f) && s > 0.15f) {
-					// Blue-white
-					blueWhiteHudImage.unsafe_set(x, y, v * v * 255);
-				} else {
-					blueWhiteHudImage.unsafe_set(x, y, 0);
-				}
-
-				if ((s > 0.80f) && (v >= 0.70f) && (h < 0.25f || h > 6.0f)) {
-					// Red
-					redHudImage.unsafe_set(x, y, v * v * v * 255);
-				} else {
-					redHudImage.unsafe_set(x, y, 0);
-				}
-			}
-		}
-	}
-
 	private void drawDebugInfoOnImage(BufferedImage debugImage, TemplateMatch compassDotMatch, boolean hollow) {
 		Graphics2D g = debugImage.createGraphics();
 
@@ -672,11 +790,13 @@ public class CruiseControlThread extends Thread {
 		g.setColor(Color.YELLOW);
 		g.setFont(new Font("Sans Serif", Font.BOLD, 20));
 		g.drawString(String.format(Locale.US, "%.2f FPS / %s", fps, this.gameState), 10, 30);
-		g.drawString(String.format(Locale.US, "x=%d%% / y=%d%% / hollow=%s", this.xPercent, this.yPercent, this.hollow), 10, 60);
+		g.drawString(String.format(Locale.US, "x=%d%% / y=%d%% / hollow=%s / hud=%b / compass=%b / dot=%b", this.xPercent, this.yPercent, this.hollow, this.targetMatch != null,
+				this.compassMatch != null, compassDotMatch != null), 10, 60);
 		g.drawString(String.format(Locale.US, "pitchUp=%d%% / pitchDown=%d%%", this.shipControl.getPitchUp(), this.shipControl.getPitchDown()), 10, 90);
 		g.drawString(String.format(Locale.US, "rollRight=%d%% / rollLeft=%d%%", this.shipControl.getRollRight(), this.shipControl.getRollLeft()), 10, 120);
 		g.drawString(String.format(Locale.US, "yawRight=%d%% / yawLeft=%d%%", this.shipControl.getYawRight(), this.shipControl.getYawLeft()), 10, 150);
 		g.drawString(String.format(Locale.US, "throttle=%d%%", this.shipControl.getThrottle()), 10, 180);
+		g.drawString(String.format(Locale.US, "fuel=%.1ft", this.fuelLevel), 10, 210);
 
 		g.dispose();
 	}
@@ -712,6 +832,31 @@ public class CruiseControlThread extends Thread {
 	public void removeDebugImageListener(DebugImageListener listener) {
 		if (listener != null) {
 			this.debugImageListeners.remove(listener);
+		}
+	}
+
+	@Override
+	public void onNewStatus(Status status) {
+		this.scoopingFuel = status.isScoopingFuel();
+	}
+
+	@Override
+	public void onNewJournalEntry(AbstractJournalEvent event) {
+		if (event instanceof StartJumpEvent) {
+			this.shipControl.stopTurning();
+			this.inSupercruiseSince = Long.MAX_VALUE;
+			this.inHyperspaceSince = System.currentTimeMillis();
+			this.gameState = GameState.IN_HYPERSPACE;
+		} else if (event instanceof FSDJumpEvent) {
+			this.fuelLevel = ((FSDJumpEvent) event).getFuelLevel().floatValue();
+			this.inHyperspaceSince = Long.MAX_VALUE;
+			this.inSupercruiseSince = System.currentTimeMillis();
+			this.gameState = GameState.HONKING;
+		} else if (event instanceof DiscoveryScanEvent) {
+			this.shipControl.honk();
+			this.gameState = GameState.GET_IN_SCOOPING_RANGE;
+		} else if (event instanceof FuelScoopEvent) {
+			this.fuelLevel = ((FuelScoopEvent) event).getTotal().floatValue();
 		}
 	}
 

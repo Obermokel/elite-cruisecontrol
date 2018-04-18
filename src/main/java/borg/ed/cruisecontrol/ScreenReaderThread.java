@@ -39,7 +39,6 @@ public class ScreenReaderThread extends Thread {
 			synchronized (this.screenReaderResult) {
 				this.screenReaderResult.setScaledScreenCapture(scaledScreenCapture);
 				this.screenReaderResult.notifyAll();
-				logger.debug("Notified waiting threads of new screen capture");
 			}
 		}
 

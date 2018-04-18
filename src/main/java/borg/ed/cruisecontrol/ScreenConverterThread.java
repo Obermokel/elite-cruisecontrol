@@ -57,7 +57,6 @@ public class ScreenConverterThread extends Thread {
 				this.screenConverterResult.setRedHudImage(redHudImage);
 				this.screenConverterResult.setBrightImage(brightImage);
 				this.screenConverterResult.notifyAll();
-				logger.debug("Notified waiting threads of new screen conversion result");
 			}
 		}
 
@@ -95,7 +94,7 @@ public class ScreenConverterThread extends Thread {
 					redHudImage.unsafe_set(x, y, 0);
 				}
 
-				if (v >= 1.0f) {
+				if (v >= 1f) {
 					brightImage.unsafe_set(x, y, 255);
 				} else {
 					brightImage.unsafe_set(x, y, 0);
