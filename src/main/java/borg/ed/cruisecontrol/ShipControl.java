@@ -174,6 +174,20 @@ public class ShipControl {
         this.pressKey(KeyEvent.VK_SPACE, 7000);
     }
 
+    public void honkDelayed(final long millis) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Thread.sleep(millis);
+                    ShipControl.this.honk();
+                } catch (InterruptedException e) {
+                    // Quit
+                }
+            }
+        }).start();
+    }
+
     public void uiLeftPanel() {
         this.pressKey(KeyEvent.VK_1);
     }

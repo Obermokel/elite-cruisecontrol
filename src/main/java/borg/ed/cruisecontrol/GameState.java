@@ -15,9 +15,9 @@ public enum GameState {
     IN_HYPERSPACE,
 
     /**
-     * Honk and wait until bodies discovered.
+     * Just dropped out from hyperspace. Wait until the FSD cooldown starts.
      */
-    HONKING,
+    WAIT_FOR_FSD_COOLDOWN,
 
     /**
      * Accelerate to 25% and wait until we are scooping fuel.

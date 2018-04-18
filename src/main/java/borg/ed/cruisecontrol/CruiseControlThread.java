@@ -29,7 +29,6 @@ import borg.ed.universe.journal.JournalUpdateListener;
 import borg.ed.universe.journal.Status;
 import borg.ed.universe.journal.StatusUpdateListener;
 import borg.ed.universe.journal.events.AbstractJournalEvent;
-import borg.ed.universe.journal.events.DiscoveryScanEvent;
 import borg.ed.universe.journal.events.FSDJumpEvent;
 import borg.ed.universe.journal.events.FuelScoopEvent;
 import borg.ed.universe.journal.events.ReceiveTextEvent;
@@ -59,6 +58,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     private boolean hollow = false;
     private float brightnessAhead = 0;
     private boolean scoopingFuel = false;
+    private boolean fsdCooldown = false;
     private float fuelLevel = 0;
     private long inSupercruiseSince = Long.MAX_VALUE;
     private long inHyperspaceSince = Long.MAX_VALUE; // Timestamp when the FSD was charged and the countdown started
@@ -228,7 +228,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                             this.shipControl.setThrottle(0);
                         }
                         break;
-                    case HONKING:
+                    case WAIT_FOR_FSD_COOLDOWN:
                         if (this.shipControl.getThrottle() > 0) {
                             this.shipControl.setThrottle(0);
                         }
@@ -719,7 +719,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
     @Override
     public void onNewStatus(Status status) {
+        if (status.isFsdCooldown() && !this.fsdCooldown && this.gameState == GameState.WAIT_FOR_FSD_COOLDOWN) {
+            this.gameState = GameState.GET_IN_SCOOPING_RANGE;
+        }
+
         this.scoopingFuel = status.isScoopingFuel();
+        this.fsdCooldown = status.isFsdCooldown();
     }
 
     @Override
@@ -733,10 +738,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             this.fuelLevel = ((FSDJumpEvent) event).getFuelLevel().floatValue();
             this.inHyperspaceSince = Long.MAX_VALUE;
             this.inSupercruiseSince = System.currentTimeMillis();
-            this.gameState = GameState.HONKING;
-        } else if (event instanceof DiscoveryScanEvent) {
-            this.shipControl.honk();
-            this.gameState = GameState.GET_IN_SCOOPING_RANGE;
+            this.shipControl.honkDelayed(1000);
+            this.gameState = GameState.WAIT_FOR_FSD_COOLDOWN;
         } else if (event instanceof FuelScoopEvent) {
             this.fuelLevel = ((FuelScoopEvent) event).getTotal().floatValue();
         } else if (event instanceof ReceiveTextEvent) {
