@@ -338,12 +338,12 @@ public class ShipControl {
 					//					if (lastPercent == 100 && this.percent == 100) {
 					lastPercent = this.percent;
 					this.robot.keyPress(this.keyCode);
-					Thread.sleep(this.percent * 10);
+					Thread.sleep(this.percent * 4);
 					//					}
 
 					if (this.percent < 100) {
 						this.robot.keyRelease(this.keyCode);
-						Thread.sleep((100 - this.percent) * 10);
+						Thread.sleep((100 - this.percent) * 4);
 					}
 				} catch (InterruptedException e) {
 					break;
