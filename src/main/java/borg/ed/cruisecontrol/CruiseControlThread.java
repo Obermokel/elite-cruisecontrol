@@ -11,6 +11,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import javax.imageio.ImageIO;
 
@@ -82,10 +86,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private static final int COMPASS_REGION_HEIGHT = 200;
 	private TemplateMatch compassMatch = null;
 
-	private static final int TARGET_REGION_X = 600;
+	private static final int TARGET_REGION_X = 555;
 	private static final int TARGET_REGION_Y = 190;
-	private static final int TARGET_REGION_WIDTH = 700;
-	private static final int TARGET_REGION_HEIGHT = 500;
+	private static final int TARGET_REGION_WIDTH = 810;
+	private static final int TARGET_REGION_HEIGHT = 550;
 	private TemplateMatch targetMatch = null;
 
 	private static final int CRUISE30KMS_REGION_X = 1040;
@@ -127,6 +131,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		GrayF32 brightImage = orangeHudImage.createSameShape();
 		BufferedImage debugImage = new BufferedImage(CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT, BufferedImage.TYPE_INT_RGB);
 
+		final ExecutorService threadPool = Executors.newFixedThreadPool(4);
+
 		while (!Thread.currentThread().isInterrupted()) {
 			try {
 				lastTick = System.currentTimeMillis();
@@ -162,10 +168,21 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				if (gameState == GameState.UNKNOWN || gameState == GameState.COMPASS_ALIGNING_JUMP || gameState == GameState.COMPASS_ALIGNING_STAR
 						|| gameState == GameState.COMPASS_ALIGNING_ESCAPE || gameState == GameState.COMPASS_ALIGNED_STAR || gameState == GameState.ALIGN_TO_NEXT_SYSTEM
 						|| gameState == GameState.FSD_CHARGING) {
-					targetMatch = locateTargetSmart(orangeHudImage);
-					if (targetMatch == null) {
-						compassMatch = locateCompassSmart(orangeHudImage);
-					}
+					final GrayF32 myOrangeHudImage = orangeHudImage.clone();
+					Future<TemplateMatch> futureTarget = threadPool.submit(new Callable<TemplateMatch>() {
+						@Override
+						public TemplateMatch call() throws Exception {
+							return locateTargetSmart(myOrangeHudImage);
+						}
+					});
+					Future<TemplateMatch> futureCompass = threadPool.submit(new Callable<TemplateMatch>() {
+						@Override
+						public TemplateMatch call() throws Exception {
+							return locateCompassSmart(myOrangeHudImage);
+						}
+					});
+					targetMatch = futureTarget.get();
+					compassMatch = futureCompass.get();
 				} else {
 					compassMatch = null;
 					targetMatch = null;
@@ -255,12 +272,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					}
 					break;
 				case SCOOPING_FUEL:
-					if (this.fuelLevel >= CruiseControlApplication.MAX_FUEL) {
+					if (this.fuelLevel >= (CruiseControlApplication.MAX_FUEL / 2)) {
 						this.gameState = GameState.ALIGN_TO_STAR_ESCAPE;
 					}
 					break;
 				case ALIGN_TO_STAR_ESCAPE:
-					if (this.brightnessAhead > 0.1f) {
+					if (this.brightnessAhead > 0.05f) {
 						this.shipControl.setPitchDown(100);
 					} else {
 						this.shipControl.stopTurning();
@@ -268,10 +285,16 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					}
 					break;
 				case ESCAPE_FROM_STAR_SLOW:
-					if (this.shipControl.getThrottle() != 25) {
-						this.shipControl.setThrottle(25);
+					if (this.fuelLevel >= CruiseControlApplication.MAX_FUEL) {
+						if (this.shipControl.getThrottle() != 50) {
+							this.shipControl.setThrottle(50);
+						}
+					} else {
+						if (this.shipControl.getThrottle() != 25) {
+							this.shipControl.setThrottle(25);
+						}
 					}
-					if (this.brightnessAhead > 0.1f) {
+					if (this.brightnessAhead > 0.05f) {
 						this.shipControl.setPitchDown(100);
 					} else {
 						this.shipControl.stopTurning();
@@ -285,7 +308,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					if (this.shipControl.getThrottle() != 75) {
 						this.shipControl.setThrottle(75);
 					}
-					if (this.brightnessAhead > 0.1f) {
+					if (this.brightnessAhead > 0.05f) {
 						this.shipControl.setPitchDown(100);
 					} else {
 						this.shipControl.stopTurning();
@@ -425,6 +448,24 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 		for (int x = 0; x < 32; x++) {
 			for (int y = 0; y < 12; y++) {
+				int myX = offX + x * stepX;
+				int myY = offY + y * stepY;
+				if (brightImage.unsafe_get(myX, myY) > 0) {
+					bright++;
+				}
+			}
+		}
+
+		// Upper 10% of the screen
+		stepX = (int) (brightImage.width / 32.0f);
+		offX = stepX / 2;
+		stepY = (int) (brightImage.height / 40.0f);
+		offY = stepY / 2;
+
+		total += 32.0f * 4.0f;
+
+		for (int x = 0; x < 32; x++) {
+			for (int y = 0; y < 4; y++) {
 				int myX = offX + x * stepX;
 				int myY = offY + y * stepY;
 				if (brightImage.unsafe_get(myX, myY) > 0) {
@@ -681,8 +722,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		int startX = this.targetMatch == null ? TARGET_REGION_WIDTH / 2 : this.targetMatch.getX() - TARGET_REGION_X;
 		int startY = this.targetMatch == null ? TARGET_REGION_HEIGHT / 2 : this.targetMatch.getY() - TARGET_REGION_Y;
 		TemplateMatch m = this.locateTemplateInRegionSmart(orangeHudImage, TARGET_REGION_X, TARGET_REGION_Y, TARGET_REGION_WIDTH, TARGET_REGION_HEIGHT, this.refTarget, this.refTargetMask,
-				startX, startY, 0.08f);
-		return m.getErrorPerPixel() < 0.08f ? m : null;
+				startX, startY, 0.03f);
+		return m.getErrorPerPixel() < 0.03f ? m : null;
 	}
 
 	private TemplateMatch locateCruise30kms(GrayF32 orangeHudImage) {

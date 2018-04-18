@@ -94,8 +94,8 @@ public class ScreenConverterThread extends Thread {
 					redHudImage.unsafe_set(x, y, 0);
 				}
 
-				if (v >= 1f) {
-					brightImage.unsafe_set(x, y, 255);
+				if (v >= 0.85f) {
+					brightImage.unsafe_set(x, y, v * 255);
 				} else {
 					brightImage.unsafe_set(x, y, 0);
 				}
