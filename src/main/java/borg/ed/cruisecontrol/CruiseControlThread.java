@@ -31,7 +31,6 @@ import borg.ed.universe.journal.StatusUpdateListener;
 import borg.ed.universe.journal.events.AbstractJournalEvent;
 import borg.ed.universe.journal.events.FSDJumpEvent;
 import borg.ed.universe.journal.events.FuelScoopEvent;
-import borg.ed.universe.journal.events.ReceiveTextEvent;
 import borg.ed.universe.journal.events.StartJumpEvent;
 
 public class CruiseControlThread extends Thread implements JournalUpdateListener, StatusUpdateListener {
@@ -309,8 +308,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				case IN_EMERGENCY_EXIT:
 					break;
 				default:
-					logger.error("Unknown game state " + this.gameState);
-					this.doEmergencyExit();
+					this.doEmergencyExit("Unknown game state " + this.gameState);
 					break;
 				}
 			} catch (Exception e) {
@@ -322,8 +320,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		logger.info(this.getName() + " stopped");
 	}
 
-	private void doEmergencyExit() {
-		logger.warn("Emergency exit");
+	private void doEmergencyExit(String reason) {
+		logger.warn("Emergency exit! Reason: " + reason);
 		this.gameState = GameState.IN_EMERGENCY_EXIT;
 		this.shipControl.fullStop();
 		this.shipControl.exitToMainMenu();
@@ -730,6 +728,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			this.gameState = GameState.GET_IN_SCOOPING_RANGE;
 		}
 
+		if (status.isLowFuel()) {
+			this.doEmergencyExit("Low fuel");
+		} else if (status.isInDanger()) {
+			this.doEmergencyExit("In danger");
+		}
+
 		this.scoopingFuel = status.isScoopingFuel();
 		this.fsdCooldown = status.isFsdCooldown();
 	}
@@ -749,9 +753,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			this.gameState = GameState.WAIT_FOR_FSD_COOLDOWN;
 		} else if (event instanceof FuelScoopEvent) {
 			this.fuelLevel = ((FuelScoopEvent) event).getTotal().floatValue();
-		} else if (event instanceof ReceiveTextEvent) {
-			logger.debug("Test emergency exit on received message");
-			this.doEmergencyExit();
 		}
 	}
 
