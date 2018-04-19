@@ -6,6 +6,8 @@ import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Robot;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -24,6 +26,7 @@ import java.util.stream.Collectors;
 
 import javax.imageio.ImageIO;
 
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +44,7 @@ import borg.ed.universe.journal.events.AbstractJournalEvent;
 import borg.ed.universe.journal.events.DiscoveryScanEvent;
 import borg.ed.universe.journal.events.FSDJumpEvent;
 import borg.ed.universe.journal.events.FuelScoopEvent;
+import borg.ed.universe.journal.events.ScanEvent;
 import borg.ed.universe.journal.events.StartJumpEvent;
 import borg.ed.universe.model.Body;
 import borg.ed.universe.service.UniverseService;
@@ -85,6 +89,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     private List<Body> knownValuableBodies = new ArrayList<>();
     private int discoveredBodiesInSystem = 0;
     private Map<TemplateMatchRgb, Point> systemMapScreenCoords = new HashMap<>();
+    private TemplateMatchRgb currentBodyTemplateMatch = null;
     private long lastTick = System.currentTimeMillis();
 
     private static final int COMPASS_REGION_X = 620;
@@ -326,10 +331,52 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                     case SCAN_SYSTEM_MAP:
                         synchronized (screenConverterResult) {
                             if (this.scanSystemMap(screenConverterResult.getRgb().clone())) {
-                                this.shipControl.toggleSystemMap();
-                                this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
-                                logger.debug("System map scanned, !!!WIP!!!");
+                                if (this.systemMapScreenCoords.isEmpty()) {
+                                    this.shipControl.toggleSystemMap();
+                                    this.shipControl.setThrottle(100);
+                                    this.shipControl.selectNextSystemInRoute();
+                                    this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+                                    logger.debug("System map scanned, no bodies recognized, aligning to next jump target at 100% throttle");
+                                } else {
+                                    this.clickOnNextBodyOnSystemMap();
+                                    this.shipControl.toggleSystemMap();
+                                    this.shipControl.setThrottle(25);
+                                    this.gameState = GameState.ALIGN_TO_NEXT_BODY;
+                                    logger.debug("System map scanned, aligning to first body at 25% throttle");
+                                }
                             }
+                        }
+                        break;
+                    case ALIGN_TO_NEXT_BODY:
+                        if (this.shipControl.getThrottle() != 25) {
+                            this.shipControl.setThrottle(25);
+                        }
+                        if (this.brightnessAhead > 0.05f) {
+                            this.shipControl.setPitchDown(50);
+                        } else if (targetMatch != null) {
+                            if (this.alignToTargetInHud(targetMatch)) {
+                                this.shipControl.setThrottle(75);
+                                this.gameState = GameState.APPROACH_NEXT_BODY;
+                                logger.debug("Next body in sight, accelerating to 75% and waiting for detailed surface scan");
+                            }
+                        } else {
+                            if (this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow)) {
+                                this.shipControl.setThrottle(75);
+                                this.gameState = GameState.APPROACH_NEXT_BODY;
+                                logger.debug("Next body in sight, accelerating to 75% and waiting for detailed surface scan");
+                            }
+                        }
+                        break;
+                    case APPROACH_NEXT_BODY:
+                        if (this.shipControl.getThrottle() != 75) {
+                            this.shipControl.setThrottle(75);
+                        }
+                        if (this.brightnessAhead > 0.05f) {
+                            this.shipControl.setPitchDown(50);
+                        } else if (targetMatch != null) {
+                            this.alignToTargetInHud(targetMatch);
+                        } else {
+                            this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow);
                         }
                         break;
                     case ALIGN_TO_NEXT_SYSTEM:
@@ -867,6 +914,61 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             this.fuelLevel = ((FuelScoopEvent) event).getTotal().floatValue();
         } else if (event instanceof DiscoveryScanEvent) {
             this.discoveredBodiesInSystem += MiscUtil.getAsInt(((DiscoveryScanEvent) event).getBodies(), 0);
+        } else if (event instanceof ScanEvent) {
+            String realPlanetClass = ((ScanEvent) event).getPlanetClass();
+            String guessedPlanetClass = this.currentBodyTemplateMatch.getTemplate().getName();
+            if (StringUtils.isNotEmpty(realPlanetClass) && !realPlanetClass.equals(guessedPlanetClass)) {
+                logger.warn("Guessed " + guessedPlanetClass + ", but was " + realPlanetClass);
+                try {
+                    BufferedImage planetImage = ConvertBufferedImage.convertTo_F32(this.currentBodyTemplateMatch.getImage(), null, true);
+                    File refFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/sysMapPlanets/" + realPlanetClass);
+                    final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
+                    ImageIO.write(planetImage, "PNG", new File(refFolder, ts + " " + realPlanetClass + " " + this.currentSystemName + ".png"));
+                } catch (IOException e) {
+                    logger.warn("Failed to write planet ref image", e);
+                }
+            }
+
+            this.currentBodyTemplateMatch = null;
+            this.knownValuableBodies = this.knownValuableBodies.stream().filter(b -> !b.getName().equals(((ScanEvent) event).getBodyName())).collect(Collectors.toList());
+            if (this.systemMapScreenCoords.isEmpty()) {
+                this.shipControl.setThrottle(100);
+                this.shipControl.selectNextSystemInRoute();
+                this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+                logger.debug("All bodies scanned, aligning to next jump target at 100% throttle");
+            } else {
+                this.shipControl.toggleSystemMap();
+                this.clickOnNextBodyOnSystemMap();
+                this.shipControl.toggleSystemMap();
+                this.shipControl.setThrottle(25);
+                this.gameState = GameState.ALIGN_TO_NEXT_BODY;
+                logger.debug(((ScanEvent) event).getBodyName() + " scanned, aligning to next body at 25% throttle");
+            }
+        }
+    }
+
+    private void clickOnNextBodyOnSystemMap() {
+        this.currentBodyTemplateMatch = this.systemMapScreenCoords.keySet().iterator().next();
+        Point scaledCoords = this.systemMapScreenCoords.remove(this.currentBodyTemplateMatch);
+        int screenX = Math.round(scaledCoords.x * (2560f / 1920f)) + ((3440 - 2560) / 2); // FIXME
+        int screenY = Math.round(scaledCoords.y * (1440f / 1080f)); // FIXME
+
+        try {
+            Thread.sleep(1000);
+            this.robot.mouseMove(screenX, screenY);
+            Thread.sleep(100);
+            this.robot.mouseMove(screenX + 1, screenY + 1);
+            Thread.sleep(500);
+            this.robot.mousePress(InputEvent.getMaskForButton(1));
+            Thread.sleep(100);
+            this.robot.mouseRelease(InputEvent.getMaskForButton(1));
+            Thread.sleep(500);
+            this.robot.keyPress(KeyEvent.VK_ENTER);
+            Thread.sleep(100);
+            this.robot.keyRelease(KeyEvent.VK_ENTER);
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            logger.warn("Interrupted while clicked on system map", e);
         }
     }
 

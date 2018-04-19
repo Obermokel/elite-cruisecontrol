@@ -47,6 +47,10 @@ public enum GameState {
 
     SCAN_SYSTEM_MAP,
 
+    ALIGN_TO_NEXT_BODY,
+
+    APPROACH_NEXT_BODY,
+
     /**
      * At 100% throttle align to the next system.
      */
