@@ -41,9 +41,10 @@ public class DebugPanel extends JPanel {
 
     public void writeScreenCapture() {
         try {
+            File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
             final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
 
-            ImageIO.write(this.debugImage, "PNG", new File(System.getProperty("user.home"), ts + " 000 debug.png"));
+            ImageIO.write(this.debugImage, "PNG", new File(debugFolder, ts + " 000 debug.png"));
 
             ImageIO.write(ConvertBufferedImage.convertTo(this.orangeHudImage, null), "PNG",
                     new File(System.getProperty("user.home"), ts + " CruiseControlDebug 010 orange.png"));

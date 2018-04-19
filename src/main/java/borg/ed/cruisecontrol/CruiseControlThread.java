@@ -9,7 +9,9 @@ import java.awt.Robot;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -386,6 +388,21 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
             // Debug
             logger.info(String.format(Locale.US, "System map scan took %,d ms, found %d bodies", System.currentTimeMillis() - scanStart, this.systemMapScreenCoords.size()));
+
+            try {
+                BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(rgb, null, true);
+                Graphics2D g = debugImage.createGraphics();
+                g.setColor(Color.CYAN);
+                for (TemplateMatch bl : bodyLocations) {
+                    g.drawRect(bl.getX(), bl.getY(), bl.getWidth(), bl.getHeight());
+                }
+                g.dispose();
+                File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
+                final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
+                ImageIO.write(debugImage, "PNG", new File(debugFolder, ts + " System map debug " + this.currentSystemName + ".png"));
+            } catch (IOException e) {
+                logger.warn("Failed to write debug image", e);
+            }
         }
 
         return foundUniversalCartographicsLogo;
