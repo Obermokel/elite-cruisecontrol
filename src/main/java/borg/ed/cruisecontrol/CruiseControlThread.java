@@ -257,11 +257,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                         if (this.scoopingFuel) {
                             this.shipControl.setThrottle(0);
                             this.gameState = GameState.SCOOPING_FUEL;
+                            logger.debug("Scooping fuel...");
                         }
                         break;
                     case SCOOPING_FUEL:
                         if (this.fuelLevel >= (CruiseControlApplication.MAX_FUEL / 2)) {
                             this.gameState = GameState.ALIGN_TO_STAR_ESCAPE;
+                            logger.debug("Fuel tank filled > 50%, aligning to star escape vector");
                         }
                         break;
                     case ALIGN_TO_STAR_ESCAPE:
@@ -270,12 +272,14 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                         } else {
                             this.shipControl.stopTurning();
                             this.gameState = GameState.ESCAPE_FROM_STAR_SLOW;
+                            logger.debug("Escape vector reached, accelerating to 25%");
                         }
                         break;
                     case ESCAPE_FROM_STAR_SLOW:
                         if (this.fuelLevel >= CruiseControlApplication.MAX_FUEL) {
                             if (this.shipControl.getThrottle() != 50) {
                                 this.shipControl.setThrottle(50);
+                                logger.debug("Fuel tank full, accelerating to 50%");
                             }
                         } else {
                             if (this.shipControl.getThrottle() != 25) {
@@ -288,8 +292,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                             this.shipControl.stopTurning();
                         }
                         if (!this.scoopingFuel) {
-                            this.gameState = GameState.ESCAPE_FROM_STAR_FASTER;
                             this.escapingFromStarSince = System.currentTimeMillis();
+                            this.gameState = GameState.ESCAPE_FROM_STAR_FASTER;
+                            logger.debug("Scooping range left, accelerating to 75%");
                         }
                         break;
                     case ESCAPE_FROM_STAR_FASTER:
@@ -307,10 +312,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                                 this.shipControl.setThrottle(0);
                                 this.shipControl.toggleSystemMap();
                                 this.gameState = GameState.SCAN_SYSTEM_MAP;
+                                logger.debug("Escaped from entry star, " + this.discoveredBodiesInSystem + " bodies discovered, throttle to 0% and scanning system map");
                             } else {
                                 this.shipControl.setThrottle(100);
                                 this.shipControl.selectNextSystemInRoute();
                                 this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+                                logger.debug("Escaped from entry star, no other bodies discovered, aligning to next jump target at 100% throttle");
                             }
                         }
                         break;
@@ -319,6 +326,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                             if (this.scanSystemMap(screenConverterResult.getRgb().clone())) {
                                 this.shipControl.toggleSystemMap();
                                 this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+                                logger.debug("System map scanned, !!!WIP!!!");
                             }
                         }
                         break;
@@ -330,11 +338,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                             if (this.alignToTargetInHud(targetMatch)) {
                                 this.shipControl.toggleFsd();
                                 this.gameState = GameState.FSD_CHARGING;
+                                logger.debug("Next system in sight, charging FSD");
                             }
                         } else {
                             if (this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow)) {
                                 this.shipControl.toggleFsd();
                                 this.gameState = GameState.FSD_CHARGING;
+                                logger.debug("Next system in sight, charging FSD");
                             }
                         }
                         break;
@@ -355,6 +365,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
     private boolean scanSystemMap(Planar<GrayF32> rgb) {
         this.systemMapScreenCoords.clear();
+        long scanStart = System.currentTimeMillis();
 
         // Search for the UC logo - if found, the system map is open and can be scanned
         boolean foundUniversalCartographicsLogo = false;
@@ -372,6 +383,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(planetSubimage, this.refSysMapPlanets);
                 this.systemMapScreenCoords.put(bestMatch, new Point(bl.getX() + bl.getWidth() / 2, bl.getY() + bl.getHeight() / 2));
             }
+
+            // Debug
+            logger.info(String.format(Locale.US, "System map scan took %,d ms, found %d bodies", System.currentTimeMillis() - scanStart, this.systemMapScreenCoords.size()));
         }
 
         return foundUniversalCartographicsLogo;
@@ -798,6 +812,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     public void onNewStatus(Status status) {
         if (status.isFsdCooldown() && !this.fsdCooldown && this.gameState == GameState.WAIT_FOR_FSD_COOLDOWN) {
             this.gameState = GameState.GET_IN_SCOOPING_RANGE;
+            logger.debug("FSD cooldown started, getting in scooping range");
         }
 
         if (status.isLowFuel()) {
@@ -823,12 +838,14 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             this.discoveredBodiesInSystem = 0;
             this.systemMapScreenCoords.clear();
             this.gameState = GameState.IN_HYPERSPACE;
+            logger.debug("Jumping through hyperspace to " + ((StartJumpEvent) event).getStarSystem());
         } else if (event instanceof FSDJumpEvent) {
             this.fuelLevel = ((FSDJumpEvent) event).getFuelLevel().floatValue();
             this.inHyperspaceSince = Long.MAX_VALUE;
             this.inSupercruiseSince = System.currentTimeMillis();
             this.shipControl.honkDelayed(1000);
             this.gameState = GameState.WAIT_FOR_FSD_COOLDOWN;
+            logger.debug("Arrived at " + ((FSDJumpEvent) event).getStarSystem() + ", honking and waiting for FSD cooldown to start");
         } else if (event instanceof FuelScoopEvent) {
             this.fuelLevel = ((FuelScoopEvent) event).getTotal().floatValue();
         } else if (event instanceof DiscoveryScanEvent) {
