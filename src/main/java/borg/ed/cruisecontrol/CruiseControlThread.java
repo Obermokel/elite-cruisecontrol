@@ -30,12 +30,14 @@ import borg.ed.universe.journal.JournalUpdateListener;
 import borg.ed.universe.journal.Status;
 import borg.ed.universe.journal.StatusUpdateListener;
 import borg.ed.universe.journal.events.AbstractJournalEvent;
+import borg.ed.universe.journal.events.DiscoveryScanEvent;
 import borg.ed.universe.journal.events.FSDJumpEvent;
 import borg.ed.universe.journal.events.FuelScoopEvent;
 import borg.ed.universe.journal.events.StartJumpEvent;
 import borg.ed.universe.model.Body;
 import borg.ed.universe.service.UniverseService;
 import borg.ed.universe.util.BodyUtil;
+import borg.ed.universe.util.MiscUtil;
 
 public class CruiseControlThread extends Thread implements JournalUpdateListener, StatusUpdateListener {
 
@@ -69,6 +71,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     private long escapingFromStarSince = Long.MAX_VALUE;
     private String currentSystemName = "";
     private List<Body> knownValuableBodies = new ArrayList<>();
+    private int discoveredBodiesInSystem = 0;
     private long lastTick = System.currentTimeMillis();
 
     private static final int COMPASS_REGION_X = 620;
@@ -696,10 +699,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         StringBuilder sbKnownValuableBodies = new StringBuilder();
         if (this.knownValuableBodies != null) {
             for (Body body : this.knownValuableBodies) {
-                sbKnownValuableBodies.append(String.format(Locale.US, "%s (%,d CR) ", body.getName().replace(this.currentSystemName, "").trim(), BodyUtil.estimatePayout(body)));
+                sbKnownValuableBodies.append(String.format(Locale.US, " | %s (%,d CR)", body.getName().replace(this.currentSystemName, "").trim(), BodyUtil.estimatePayout(body)));
             }
         }
-        g.drawString(String.format(Locale.US, "bodies=%s", sbKnownValuableBodies), 10, 270);
+        g.drawString(String.format(Locale.US, "bodies=%d%s", this.discoveredBodiesInSystem, sbKnownValuableBodies), 10, 270);
 
         g.dispose();
     }
@@ -760,6 +763,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             this.shipControl.stopTurning();
             this.inSupercruiseSince = Long.MAX_VALUE;
             this.inHyperspaceSince = System.currentTimeMillis();
+            this.discoveredBodiesInSystem = 0;
             this.gameState = GameState.IN_HYPERSPACE;
         } else if (event instanceof FSDJumpEvent) {
             this.fuelLevel = ((FSDJumpEvent) event).getFuelLevel().floatValue();
@@ -773,6 +777,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             this.gameState = GameState.WAIT_FOR_FSD_COOLDOWN;
         } else if (event instanceof FuelScoopEvent) {
             this.fuelLevel = ((FuelScoopEvent) event).getTotal().floatValue();
+        } else if (event instanceof DiscoveryScanEvent) {
+            this.discoveredBodiesInSystem += MiscUtil.getAsInt(((DiscoveryScanEvent) event).getBodies(), 0);
         }
     }
 
