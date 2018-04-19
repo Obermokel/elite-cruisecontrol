@@ -1,44 +1,54 @@
 package borg.ed.cruisecontrol;
 
 import boofcv.struct.image.GrayF32;
+import boofcv.struct.image.Planar;
 
 public class ScreenConverterResult {
 
-	private GrayF32 orangeHudImage = null;
-	private GrayF32 blueWhiteHudImage = null;
-	private GrayF32 redHudImage = null;
-	private GrayF32 brightImage = null;
+    private Planar<GrayF32> rgb = null;
+    private GrayF32 orangeHudImage = null;
+    private GrayF32 blueWhiteHudImage = null;
+    private GrayF32 redHudImage = null;
+    private GrayF32 brightImage = null;
 
-	public GrayF32 getOrangeHudImage() {
-		return orangeHudImage;
-	}
+    public Planar<GrayF32> getRgb() {
+        return rgb;
+    }
 
-	public void setOrangeHudImage(GrayF32 orangeHudImage) {
-		this.orangeHudImage = orangeHudImage;
-	}
+    public void setRgb(Planar<GrayF32> rgb) {
+        this.rgb = rgb;
+    }
 
-	public GrayF32 getBlueWhiteHudImage() {
-		return blueWhiteHudImage;
-	}
+    public GrayF32 getOrangeHudImage() {
+        return orangeHudImage;
+    }
 
-	public void setBlueWhiteHudImage(GrayF32 blueWhiteHudImage) {
-		this.blueWhiteHudImage = blueWhiteHudImage;
-	}
+    public void setOrangeHudImage(GrayF32 orangeHudImage) {
+        this.orangeHudImage = orangeHudImage;
+    }
 
-	public GrayF32 getRedHudImage() {
-		return redHudImage;
-	}
+    public GrayF32 getBlueWhiteHudImage() {
+        return blueWhiteHudImage;
+    }
 
-	public void setRedHudImage(GrayF32 redHudImage) {
-		this.redHudImage = redHudImage;
-	}
+    public void setBlueWhiteHudImage(GrayF32 blueWhiteHudImage) {
+        this.blueWhiteHudImage = blueWhiteHudImage;
+    }
 
-	public GrayF32 getBrightImage() {
-		return brightImage;
-	}
+    public GrayF32 getRedHudImage() {
+        return redHudImage;
+    }
 
-	public void setBrightImage(GrayF32 brightImage) {
-		this.brightImage = brightImage;
-	}
+    public void setRedHudImage(GrayF32 redHudImage) {
+        this.redHudImage = redHudImage;
+    }
+
+    public GrayF32 getBrightImage() {
+        return brightImage;
+    }
+
+    public void setBrightImage(GrayF32 brightImage) {
+        this.brightImage = brightImage;
+    }
 
 }

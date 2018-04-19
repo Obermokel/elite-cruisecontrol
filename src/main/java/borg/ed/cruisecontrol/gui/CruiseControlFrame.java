@@ -118,8 +118,8 @@ public class CruiseControlFrame extends JFrame implements WindowListener, KeyLis
     }
 
     @Override
-    public void onNewDebugImage(BufferedImage debugImage, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage) {
-        this.debugPanel.updateScreenCapture(debugImage, orangeHudImage, blueWhiteHudImage, redHudImage);
+    public void onNewDebugImage(BufferedImage debugImage, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
+        this.debugPanel.updateScreenCapture(debugImage, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
     }
 
     @Override

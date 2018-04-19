@@ -170,6 +170,10 @@ public class ShipControl {
         this.pressKey(KeyEvent.VK_J);
     }
 
+    public void toggleSystemMap() {
+        this.pressKey(KeyEvent.VK_S);
+    }
+
     public void honk() {
         this.pressKey(KeyEvent.VK_SPACE, 7000);
     }
