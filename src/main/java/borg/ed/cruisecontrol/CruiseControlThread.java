@@ -15,6 +15,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 import javax.imageio.ImageIO;
 
@@ -32,6 +33,9 @@ import borg.ed.universe.journal.events.AbstractJournalEvent;
 import borg.ed.universe.journal.events.FSDJumpEvent;
 import borg.ed.universe.journal.events.FuelScoopEvent;
 import borg.ed.universe.journal.events.StartJumpEvent;
+import borg.ed.universe.model.Body;
+import borg.ed.universe.service.UniverseService;
+import borg.ed.universe.util.BodyUtil;
 
 public class CruiseControlThread extends Thread implements JournalUpdateListener, StatusUpdateListener {
 
@@ -39,6 +43,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 	private final Robot robot;
 	private final Rectangle screenRect;
+	private final UniverseService universeService;
 	private final ShipControl shipControl;
 
 	private GrayF32 refCompass = null;
@@ -62,6 +67,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private long inSupercruiseSince = Long.MAX_VALUE;
 	private long inHyperspaceSince = Long.MAX_VALUE; // Timestamp when the FSD was charged and the countdown started
 	private long escapingFromStarSince = Long.MAX_VALUE;
+	private List<Body> knownValuableBodies = null;
 	private long lastTick = System.currentTimeMillis();
 
 	private static final int COMPASS_REGION_X = 620;
@@ -78,12 +84,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 	private List<DebugImageListener> debugImageListeners = new ArrayList<>();
 
-	public CruiseControlThread(Robot robot, Rectangle screenRect) {
+	public CruiseControlThread(Robot robot, Rectangle screenRect, UniverseService universeService) {
 		this.setName("CCThread");
 		this.setDaemon(true);
 
 		this.robot = robot;
 		this.screenRect = screenRect;
+		this.universeService = universeService;
 		this.shipControl = new ShipControl(robot);
 	}
 
@@ -750,6 +757,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			this.inHyperspaceSince = Long.MAX_VALUE;
 			this.inSupercruiseSince = System.currentTimeMillis();
 			this.shipControl.honkDelayed(1000);
+			this.knownValuableBodies = this.universeService.findBodiesByStarSystemName(((FSDJumpEvent) event).getStarSystem()).stream()
+					.filter(b -> b.getDistanceToArrival().longValue() < 10000 && BodyUtil.estimatePayout(b) >= 10000).collect(Collectors.toList());
 			this.gameState = GameState.WAIT_FOR_FSD_COOLDOWN;
 		} else if (event instanceof FuelScoopEvent) {
 			this.fuelLevel = ((FuelScoopEvent) event).getTotal().floatValue();

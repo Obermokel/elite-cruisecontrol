@@ -15,6 +15,7 @@ import borg.ed.cruisecontrol.gui.CruiseControlFrame;
 import borg.ed.universe.UniverseApplication;
 import borg.ed.universe.journal.JournalReaderThread;
 import borg.ed.universe.journal.StatusReaderThread;
+import borg.ed.universe.service.UniverseService;
 
 @Configuration
 @Import(UniverseApplication.class)
@@ -31,7 +32,9 @@ public class CruiseControlApplication {
 		Rectangle screenRect = new Rectangle(primaryScreen.getDisplayMode().getWidth(), primaryScreen.getDisplayMode().getHeight());
 		Robot robot = new Robot(primaryScreen);
 
-		CruiseControlThread cruiseControlThread = new CruiseControlThread(robot, screenRect);
+		UniverseService universeService = APPCTX.getBean(UniverseService.class);
+
+		CruiseControlThread cruiseControlThread = new CruiseControlThread(robot, screenRect, universeService);
 		cruiseControlThread.start();
 
 		CruiseControlFrame cruiseControlFrame = new CruiseControlFrame();
