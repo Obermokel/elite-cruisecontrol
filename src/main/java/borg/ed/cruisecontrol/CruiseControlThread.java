@@ -30,6 +30,8 @@ import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import boofcv.alg.filter.basic.GrayImageOps;
+import boofcv.core.image.ConvertImage;
 import boofcv.io.image.ConvertBufferedImage;
 import boofcv.struct.image.GrayF32;
 import boofcv.struct.image.Planar;
@@ -37,6 +39,7 @@ import borg.ed.cruisecontrol.templatematching.TemplateMatch;
 import borg.ed.cruisecontrol.templatematching.TemplateMatchRgb;
 import borg.ed.cruisecontrol.templatematching.TemplateMatcher;
 import borg.ed.cruisecontrol.templatematching.TemplateRgb;
+import borg.ed.cruisecontrol.util.ImageUtil;
 import borg.ed.universe.journal.JournalUpdateListener;
 import borg.ed.universe.journal.Status;
 import borg.ed.universe.journal.StatusUpdateListener;
@@ -67,8 +70,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private GrayF32 refTarget = null;
 	private GrayF32 refTargetMask = null;
 	private Planar<GrayF32> refUniversalCartographics = null;
-	private Planar<GrayF32> refGenericBody = null;
+	private GrayF32 refGenericBody = null;
 	private GrayF32 refGenericBodyMask = null;
+	private GrayF32 refGenericBody50 = null;
+	private GrayF32 refGenericBody50Mask = null;
+	private GrayF32 refGenericBody60 = null;
+	private GrayF32 refGenericBody60Mask = null;
 	private List<TemplateRgb> refSysMapPlanets = null;
 
 	private GameState gameState = GameState.UNKNOWN;
@@ -170,7 +177,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				targetMatch = null;
 				xPercent = 0;
 				yPercent = 0;
-				if (gameState == GameState.UNKNOWN || gameState == GameState.ALIGN_TO_NEXT_SYSTEM || gameState == GameState.FSD_CHARGING) {
+				if (gameState == GameState.UNKNOWN || gameState == GameState.ALIGN_TO_NEXT_SYSTEM || gameState == GameState.FSD_CHARGING || gameState == GameState.ALIGN_TO_NEXT_BODY
+						|| gameState == GameState.APPROACH_NEXT_BODY) {
 					final GrayF32 myOrangeHudImage = orangeHudImage.clone();
 					Future<TemplateMatch> futureTarget = threadPool.submit(new Callable<TemplateMatch>() {
 						@Override
@@ -293,7 +301,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 							this.shipControl.setThrottle(25);
 						}
 					}
-					if (this.brightnessAhead > 0.05f) {
+					if (this.brightnessAhead > 0.10f) {
 						this.shipControl.setPitchDown(100);
 					} else {
 						this.shipControl.stopTurning();
@@ -308,7 +316,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					if (this.shipControl.getThrottle() != 75) {
 						this.shipControl.setThrottle(75);
 					}
-					if (this.brightnessAhead > 0.05f) {
+					if (this.brightnessAhead > 0.15f) {
 						this.shipControl.setPitchDown(100);
 					} else {
 						this.shipControl.stopTurning();
@@ -348,10 +356,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					}
 					break;
 				case ALIGN_TO_NEXT_BODY:
-					if (this.shipControl.getThrottle() != 25) {
-						this.shipControl.setThrottle(25);
+					if (this.shipControl.getThrottle() != 50) {
+						this.shipControl.setThrottle(50);
 					}
-					if (this.brightnessAhead > 0.05f) {
+					if (this.brightnessAhead > 0.15f) {
+						this.shipControl.setThrottle(25);
 						this.shipControl.setPitchDown(50);
 					} else if (targetMatch != null) {
 						if (this.alignToTargetInHud(targetMatch)) {
@@ -371,7 +380,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					if (this.shipControl.getThrottle() != 75) {
 						this.shipControl.setThrottle(75);
 					}
-					if (this.brightnessAhead > 0.05f) {
+					if (this.brightnessAhead > 0.15f) {
+						this.shipControl.setThrottle(25);
 						this.shipControl.setPitchDown(50);
 					} else if (targetMatch != null) {
 						this.alignToTargetInHud(targetMatch);
@@ -419,18 +429,24 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		// Search for the UC logo - if found, the system map is open and can be scanned
 		boolean foundUniversalCartographicsLogo = false;
 		float bmepp = TemplateMatcher.findBestMatchingLocation(rgb.subimage(0, 0, 280, 100), this.refUniversalCartographics).getErrorPerPixel();
-		System.out.println(bmepp);
-		if (bmepp <= 0.01f) { // TODO subimage and error/pixel
+		if (bmepp <= 0.0005f) {
 			foundUniversalCartographicsLogo = true;
 		}
 
 		if (foundUniversalCartographicsLogo) {
-			logger.debug("Start searchring for locations");
 			// First, search for locations of planets
-			List<TemplateMatch> bodyLocations = TemplateMatcher.findAllMatchingLocations(rgb, this.refGenericBody, this.refGenericBodyMask, 0.03f); // TODO error/pixel
+			logger.debug("Convert to gray and enhance contrast");
+			GrayF32 gray = ConvertImage.average(rgb, null);
+			gray = GrayImageOps.brighten(gray, -0.1f, 1.0f, null);
+			gray = GrayImageOps.stretch(gray, 3.0f, 0.0f, 1.0f, null);
+			logger.debug("Start searchring for locations");
+			List<TemplateMatch> bodyLocations = TemplateMatcher.findAllMatchingLocations(gray, this.refGenericBody, this.refGenericBodyMask, 0.1f);
+			bodyLocations.addAll(TemplateMatcher.findAllMatchingLocations(gray, this.refGenericBody50, this.refGenericBody50Mask, 0.1f));
+			bodyLocations.addAll(TemplateMatcher.findAllMatchingLocations(gray, this.refGenericBody60, this.refGenericBody60Mask, 0.1f));
 			logger.debug("Locations found: " + bodyLocations.size());
-			bodyLocations = bodyLocations.stream().sorted((m1, m2) -> new Float(m1.getErrorPerPixel()).compareTo(new Float(m2.getErrorPerPixel()))).collect(Collectors.toList());
-			logger.debug("Sorted by epp");
+			bodyLocations = bodyLocations.stream().filter(m -> m.getX() >= 420).sorted((m1, m2) -> new Float(m1.getErrorPerPixel()).compareTo(new Float(m2.getErrorPerPixel())))
+					.collect(Collectors.toList());
+			logger.debug("Filtered and sorted by epp");
 			List<Rectangle> rects = new ArrayList<>(bodyLocations.size());
 			List<TemplateMatch> tmp = new ArrayList<>();
 			for (TemplateMatch bl : bodyLocations) {
@@ -438,7 +454,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				if (!intersectsWithAny(rect, rects)) {
 					tmp.add(bl);
 					rects.add(rect);
-					System.out.println(bl.getErrorPerPixel());
 				}
 			}
 			bodyLocations = tmp;
@@ -450,16 +465,18 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(planetSubimage, this.refSysMapPlanets);
 				this.systemMapScreenCoords.put(bestMatch, new Point(bl.getX() + bl.getWidth() / 2, bl.getY() + bl.getHeight() / 2));
 			}
+			logger.debug("Guessed planet classes");
 
 			// Debug
 			logger.info(String.format(Locale.US, "System map scan took %,d ms, found %d bodies", System.currentTimeMillis() - scanStart, this.systemMapScreenCoords.size()));
 
 			try {
-				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(rgb, null, true);
+				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
 				Graphics2D g = debugImage.createGraphics();
 				g.setColor(Color.CYAN);
 				for (TemplateMatch bl : bodyLocations) {
 					g.drawRect(bl.getX(), bl.getY(), bl.getWidth(), bl.getHeight());
+					g.drawString(String.format(Locale.US, "%.6f", bl.getErrorPerPixel()), bl.getX(), bl.getY());
 				}
 				g.dispose();
 				File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
@@ -789,19 +806,20 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		// REF IMAGES MUST BE 1440p!!!!
 		File refDir = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref");
 		try {
-			this.refCompass = ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "compass_orange.png")), (GrayF32) null);
-			this.refCompassMask = ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "compass_orange_mask.png")), (GrayF32) null);
-			this.refCompassDotFilled = ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "compass_dot_filled_bluewhite.png")), (GrayF32) null);
-			this.refCompassDotHollow = ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "compass_dot_hollow_bluewhite.png")), (GrayF32) null);
-			this.refTarget = ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "target.png")), (GrayF32) null);
-			this.refTargetMask = ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "target_mask.png")), (GrayF32) null);
-			System.out.println("Loading UC");
-			this.refUniversalCartographics = ConvertBufferedImage.convertFromMulti(ImageIO.read(new File(refDir, "universal_cartographics.png")), (Planar<GrayF32>) null, true, GrayF32.class);
-			System.out.println("Loading gen");
-			this.refGenericBody = ConvertBufferedImage.convertFromMulti(ImageIO.read(new File(refDir, "generic_body.png")), (Planar<GrayF32>) null, true, GrayF32.class);
-			System.out.println("Loading gen mask");
-			this.refGenericBodyMask = ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_mask.png")), (GrayF32) null);
-			System.out.println("Loading done");
+			this.refCompass = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "compass_orange.png")), (GrayF32) null));
+			this.refCompassMask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "compass_orange_mask.png")), (GrayF32) null));
+			this.refCompassDotFilled = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "compass_dot_filled_bluewhite.png")), (GrayF32) null));
+			this.refCompassDotHollow = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "compass_dot_hollow_bluewhite.png")), (GrayF32) null));
+			this.refTarget = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "target.png")), (GrayF32) null));
+			this.refTargetMask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "target_mask.png")), (GrayF32) null));
+			this.refUniversalCartographics = ImageUtil
+					.normalize255(ConvertBufferedImage.convertFromMulti(ImageIO.read(new File(refDir, "universal_cartographics.png")), (Planar<GrayF32>) null, true, GrayF32.class));
+			this.refGenericBody = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body.png")), (GrayF32) null));
+			this.refGenericBodyMask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_mask.png")), (GrayF32) null));
+			this.refGenericBody50 = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_50.png")), (GrayF32) null));
+			this.refGenericBody50Mask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_50_mask.png")), (GrayF32) null));
+			this.refGenericBody60 = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_60.png")), (GrayF32) null));
+			this.refGenericBody60Mask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_60_mask.png")), (GrayF32) null));
 			this.refSysMapPlanets = TemplateRgb.fromFolder(new File(refDir, "sysMapPlanets"));
 		} catch (IOException e) {
 			throw new RuntimeException("Failed to load ref images", e);
@@ -842,6 +860,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			g.setColor(new Color(brightnessRed, 127, 127));
 			g.fillRect(debugImage.getWidth() - 20, debugImage.getHeight() - brightnessHeight, 20, brightnessHeight);
 		}
+		g.setColor(Color.YELLOW);
+		g.drawString(String.format(Locale.US, "%.0f%%", brightnessAhead * 100), debugImage.getWidth() - 25, 25);
 
 		long millis = System.currentTimeMillis() - this.lastTick;
 		double fps = 1000.0 / Math.max(1, millis);
@@ -862,7 +882,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		g.drawString(String.format(Locale.US, "knownBodies=%d%s", this.discoveredBodiesInSystem, sbKnownValuableBodies), 10, 270);
 		StringBuilder sbGuessedBodies = new StringBuilder();
 		for (TemplateMatchRgb tm : this.systemMapScreenCoords.keySet()) {
-			sbKnownValuableBodies.append(String.format(Locale.US, " | %s", tm.getTemplate().getName()));
+			sbGuessedBodies.append(String.format(Locale.US, " | %s", tm.getTemplate().getName()));
 		}
 		g.drawString(String.format(Locale.US, "guessedBodies=%d%s", this.systemMapScreenCoords.size(), sbGuessedBodies), 10, 300);
 
@@ -872,10 +892,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private void drawColoredDebugImage(BufferedImage debugImage, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
 		for (int y = 0; y < debugImage.getHeight(); y++) {
 			for (int x = 0; x < debugImage.getWidth(); x++) {
-				float r = redHudImage.unsafe_get(x, y);
-				float bw = blueWhiteHudImage.unsafe_get(x, y);
-				float o = orangeHudImage.unsafe_get(x, y);
-				float b = brightImage.unsafe_get(x, y);
+				float r = redHudImage.unsafe_get(x, y) * 255;
+				float bw = blueWhiteHudImage.unsafe_get(x, y) * 255;
+				float o = orangeHudImage.unsafe_get(x, y) * 255;
+				float b = brightImage.unsafe_get(x, y) * 255;
 				if (r > 0) {
 					debugImage.setRGB(x, y, new Color((int) r, (int) (r * 0.15f), (int) (r * 0.15f)).getRGB());
 				} else if (bw > 0) {
@@ -947,15 +967,26 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		} else if (event instanceof DiscoveryScanEvent) {
 			this.discoveredBodiesInSystem += MiscUtil.getAsInt(((DiscoveryScanEvent) event).getBodies(), 0);
 		} else if (event instanceof ScanEvent) {
+			this.shipControl.setThrottle(0);
+			this.shipControl.stopTurning();
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException e1) {
+				logger.warn("Interrupted while stopping after scan event", e1);
+			}
 			String realPlanetClass = ((ScanEvent) event).getPlanetClass();
 			String guessedPlanetClass = this.currentBodyTemplateMatch.getTemplate().getName();
 			if (StringUtils.isNotEmpty(realPlanetClass) && !realPlanetClass.equals(guessedPlanetClass)) {
 				logger.warn("Guessed " + guessedPlanetClass + ", but was " + realPlanetClass);
 				try {
-					BufferedImage planetImage = ConvertBufferedImage.convertTo_F32(this.currentBodyTemplateMatch.getImage(), null, true);
+					BufferedImage planetImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(this.currentBodyTemplateMatch.getImage()), null, true);
 					File refFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/sysMapPlanets/" + realPlanetClass);
+					if (!refFolder.exists()) {
+						refFolder.mkdirs();
+					}
 					final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
 					ImageIO.write(planetImage, "PNG", new File(refFolder, ts + " " + realPlanetClass + " " + this.currentSystemName + ".png"));
+					this.loadRefImages();
 				} catch (IOException e) {
 					logger.warn("Failed to write planet ref image", e);
 				}

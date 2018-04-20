@@ -61,10 +61,10 @@ public class TemplateMatcher {
 				int pixels = 0;
 				for (int yInTemplate = 0; yInTemplate < template.height && error < bestError; yInTemplate++) {
 					for (int xInTemplate = 0; xInTemplate < template.width && error < bestError; xInTemplate++) {
-						float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate) / 255f;
+						float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
 						if (maskValue > 0) {
-							float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) / 255f;
-							float vTemplate = template.unsafe_get(xInTemplate, yInTemplate) / 255f;
+							float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
+							float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
 							float diff = vImage - vTemplate;
 							error += (diff * diff) * maskValue;
 							pixels++;
@@ -108,10 +108,10 @@ public class TemplateMatcher {
 					for (int xInTemplate = 0; xInTemplate < template.width && error < bestError && (pixels < minPixels || error / pixels < maxErrorPerPixel); xInTemplate++) {
 						float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
 						if (maskValue > 0) {
-							float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) / 255f;
-							float vTemplate = template.unsafe_get(xInTemplate, yInTemplate) / 255f;
+							float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
+							float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
 							float diff = vImage - vTemplate;
-							error += (diff * diff) * (maskValue / 255f);
+							error += (diff * diff) * (maskValue);
 							pixels++;
 						}
 					}
@@ -136,10 +136,10 @@ public class TemplateMatcher {
 							for (int xInTemplate = 0; xInTemplate < template.width && error < bestError && (pixels < minPixels || error / pixels < maxErrorPerPixel); xInTemplate++) {
 								float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
 								if (maskValue > 0) {
-									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) / 255f;
-									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate) / 255f;
+									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
+									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
 									float diff = vImage - vTemplate;
-									error += (diff * diff) * (maskValue / 255f);
+									error += (diff * diff) * (maskValue);
 									pixels++;
 								}
 							}
@@ -164,10 +164,10 @@ public class TemplateMatcher {
 							for (int xInTemplate = 0; xInTemplate < template.width && error < bestError && (pixels < minPixels || error / pixels < maxErrorPerPixel); xInTemplate++) {
 								float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
 								if (maskValue > 0) {
-									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) / 255f;
-									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate) / 255f;
+									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
+									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
 									float diff = vImage - vTemplate;
-									error += (diff * diff) * (maskValue / 255f);
+									error += (diff * diff) * (maskValue);
 									pixels++;
 								}
 							}
@@ -193,10 +193,10 @@ public class TemplateMatcher {
 							for (int xInTemplate = 0; xInTemplate < template.width && error < bestError && (pixels < minPixels || error / pixels < maxErrorPerPixel); xInTemplate++) {
 								float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
 								if (maskValue > 0) {
-									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) / 255f;
-									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate) / 255f;
+									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
+									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
 									float diff = vImage - vTemplate;
-									error += (diff * diff) * (maskValue / 255f);
+									error += (diff * diff) * (maskValue);
 									pixels++;
 								}
 							}
@@ -221,10 +221,10 @@ public class TemplateMatcher {
 							for (int xInTemplate = 0; xInTemplate < template.width && error < bestError && (pixels < minPixels || error / pixels < maxErrorPerPixel); xInTemplate++) {
 								float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
 								if (maskValue > 0) {
-									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) / 255f;
-									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate) / 255f;
+									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
+									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
 									float diff = vImage - vTemplate;
-									error += (diff * diff) * (maskValue / 255f);
+									error += (diff * diff) * (maskValue);
 									pixels++;
 								}
 							}
@@ -269,10 +269,10 @@ public class TemplateMatcher {
 					for (int xInTemplate = 0; xInTemplate < template.width && error < bestError; xInTemplate++) {
 						float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
 						if (maskValue > 0) {
-							float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) / 255f;
-							float vTemplate = template.unsafe_get(xInTemplate, yInTemplate) / 255f;
+							float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
+							float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
 							float diff = vImage - vTemplate;
-							error += (diff * diff) * (maskValue / 255f);
+							error += (diff * diff) * (maskValue);
 							pixels++;
 						}
 					}
@@ -297,10 +297,10 @@ public class TemplateMatcher {
 							for (int xInTemplate = 0; xInTemplate < template.width && error < bestError; xInTemplate++) {
 								float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
 								if (maskValue > 0) {
-									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) / 255f;
-									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate) / 255f;
+									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
+									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
 									float diff = vImage - vTemplate;
-									error += (diff * diff) * (maskValue / 255f);
+									error += (diff * diff) * (maskValue);
 									pixels++;
 								}
 							}
@@ -325,10 +325,10 @@ public class TemplateMatcher {
 							for (int xInTemplate = 0; xInTemplate < template.width && error < bestError; xInTemplate++) {
 								float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
 								if (maskValue > 0) {
-									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) / 255f;
-									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate) / 255f;
+									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
+									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
 									float diff = vImage - vTemplate;
-									error += (diff * diff) * (maskValue / 255f);
+									error += (diff * diff) * (maskValue);
 									pixels++;
 								}
 							}
@@ -354,10 +354,10 @@ public class TemplateMatcher {
 							for (int xInTemplate = 0; xInTemplate < template.width && error < bestError; xInTemplate++) {
 								float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
 								if (maskValue > 0) {
-									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) / 255f;
-									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate) / 255f;
+									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
+									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
 									float diff = vImage - vTemplate;
-									error += (diff * diff) * (maskValue / 255f);
+									error += (diff * diff) * (maskValue);
 									pixels++;
 								}
 							}
@@ -382,10 +382,10 @@ public class TemplateMatcher {
 							for (int xInTemplate = 0; xInTemplate < template.width && error < bestError; xInTemplate++) {
 								float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
 								if (maskValue > 0) {
-									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) / 255f;
-									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate) / 255f;
+									float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
+									float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
 									float diff = vImage - vTemplate;
-									error += (diff * diff) * (maskValue / 255f);
+									error += (diff * diff) * (maskValue);
 									pixels++;
 								}
 							}
@@ -407,6 +407,33 @@ public class TemplateMatcher {
 		return bestMatch;
 	}
 
+	public static List<TemplateMatch> findAllMatchingLocations(GrayF32 image, GrayF32 template, GrayF32 mask, float maxErrorPerPixel) {
+		List<TemplateMatch> matches = new ArrayList<>();
+
+		for (int yInImage = 0; yInImage <= (image.height - template.height); yInImage++) {
+			for (int xInImage = 0; xInImage <= (image.width - template.width); xInImage++) {
+				float error = 0.0f;
+				int pixels = 0;
+				for (int yInTemplate = 0; yInTemplate < template.height; yInTemplate++) {
+					for (int xInTemplate = 0; xInTemplate < template.width; xInTemplate++) {
+						float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
+						if (maskValue > 0) {
+							float diff = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) - template.unsafe_get(xInTemplate, yInTemplate);
+							error += (diff * diff) * (maskValue);
+							pixels++;
+						}
+					}
+				}
+				float errorPerPixel = error / pixels;
+				if (errorPerPixel <= maxErrorPerPixel) {
+					matches.add(new TemplateMatch(xInImage, yInImage, template.width, template.height, error, errorPerPixel));
+				}
+			}
+		}
+
+		return matches;
+	}
+
 	public static TemplateMatch findBestMatchingLocation(Planar<GrayF32> image, Planar<GrayF32> template) {
 		return TemplateMatcher.findBestMatchingLocation(image, template, null);
 	}
@@ -425,8 +452,7 @@ public class TemplateMatcher {
 						float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
 						if (maskValue > 0) {
 							for (int band = 0; band < image.bands.length; band++) {
-								float diff = image.getBand(band).unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) / 255f
-										- template.getBand(band).unsafe_get(xInTemplate, yInTemplate) / 255f;
+								float diff = image.getBand(band).unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) - template.getBand(band).unsafe_get(xInTemplate, yInTemplate);
 								error += (diff * diff) * maskValue;
 								pixels++;
 							}
@@ -457,9 +483,8 @@ public class TemplateMatcher {
 						float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
 						if (maskValue > 0) {
 							for (int band = 0; band < image.bands.length; band++) {
-								float diff = image.getBand(band).unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) / 255f
-										- template.getBand(band).unsafe_get(xInTemplate, yInTemplate) / 255f;
-								error += (diff * diff) * (maskValue / 255f);
+								float diff = image.getBand(band).unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate) - template.getBand(band).unsafe_get(xInTemplate, yInTemplate);
+								error += (diff * diff) * (maskValue);
 								pixels++;
 							}
 						}

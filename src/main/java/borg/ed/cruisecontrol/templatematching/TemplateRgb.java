@@ -32,15 +32,16 @@ public class TemplateRgb {
 		this.pixels = pixels;
 		this.mask = mask;
 		this.name = name;
+		System.out.println(file + " = " + name);
 	}
 
 	public static TemplateRgb fromFile(File file) throws IOException {
-		Planar<GrayF32> pixels = ImageUtil.normalize(ConvertBufferedImage.convertFromMulti(ImageIO.read(file), (Planar<GrayF32>) null, true, GrayF32.class));
+		Planar<GrayF32> pixels = ImageUtil.normalize255(ConvertBufferedImage.convertFromMulti(ImageIO.read(file), (Planar<GrayF32>) null, true, GrayF32.class));
 		String name = file.getParentFile().getName();
 		GrayF32 mask = null;
 		File maskFile = new File(file.getParentFile(), file.getName().replace(".png", "_mask.png"));
 		if (maskFile.exists()) {
-			mask = ImageUtil.normalize(ConvertBufferedImage.convertFrom(ImageIO.read(maskFile), (GrayF32) null));
+			mask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(maskFile), (GrayF32) null));
 		}
 
 		return new TemplateRgb(file, pixels, mask, name);
