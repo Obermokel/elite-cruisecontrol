@@ -376,7 +376,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					break;
 				case SCAN_SYSTEM_MAP:
 					synchronized (screenConverterResult) {
-						this.sysmapScannerResult = this.sysmapScanner.scanSystemMap(screenConverterResult.getRgb().clone(), this.currentSystemName);
+						this.sysmapScannerResult = this.sysmapScanner.scanSystemMap(screenConverterResult.getRgb(), screenConverterResult.getHsv(), this.currentSystemName);
 						if (this.sysmapScannerResult != null) {
 							if (this.sysmapScannerResult.getSystemMapScreenCoords().isEmpty()) {
 								// Close sysmap, then throttle up and go to next system in route

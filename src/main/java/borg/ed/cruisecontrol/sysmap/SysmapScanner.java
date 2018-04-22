@@ -12,7 +12,6 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.stream.Collectors;
 
 import javax.imageio.ImageIO;
 
@@ -20,45 +19,49 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import boofcv.alg.filter.basic.GrayImageOps;
+import boofcv.alg.filter.binary.BinaryImageOps;
+import boofcv.alg.filter.binary.Contour;
+import boofcv.alg.filter.binary.ThresholdImageOps;
 import boofcv.alg.misc.ImageMiscOps;
 import boofcv.core.image.ConvertImage;
+import boofcv.gui.binary.VisualizeBinaryData;
 import boofcv.io.image.ConvertBufferedImage;
+import boofcv.struct.ConnectRule;
 import boofcv.struct.image.GrayF32;
+import boofcv.struct.image.GrayU8;
 import boofcv.struct.image.Planar;
 import borg.ed.cruisecontrol.ScreenCoord;
-import borg.ed.cruisecontrol.templatematching.TemplateMatch;
 import borg.ed.cruisecontrol.templatematching.TemplateMatchRgb;
 import borg.ed.cruisecontrol.templatematching.TemplateMatcher;
 import borg.ed.cruisecontrol.templatematching.TemplateRgb;
 import borg.ed.cruisecontrol.util.ImageUtil;
 import borg.ed.universe.util.MiscUtil;
+import georegression.struct.point.Point2D_I32;
 
 public class SysmapScanner {
 
 	static final Logger logger = LoggerFactory.getLogger(SysmapScanner.class);
 
-	private Planar<GrayF32> refUniversalCartographics = null;
-	private GrayF32 refGenericBody = null;
-	private GrayF32 refGenericBodyMask = null;
-	private GrayF32 refGenericBody50 = null;
-	private GrayF32 refGenericBody50Mask = null;
-	private GrayF32 refGenericBody60 = null;
-	private GrayF32 refGenericBody60Mask = null;
+	private Planar<GrayF32> refUcLogo = null;
 	private List<TemplateRgb> refSysMapPlanets = null;
 
 	private boolean writeDebugImageRgbOriginal = false;
 	private boolean writeDebugImageRgbResult = false;
 	private boolean writeDebugImageGray = false;
+	private boolean writeDebugImageThreshold = false;
 
 	public SysmapScanner() {
 		this.reloadTemplates();
 	}
 
 	public boolean waitForSystemMap(Planar<GrayF32> rgb) {
-		return TemplateMatcher.findBestMatchingLocation(rgb.subimage(0, 0, 280, 100), this.refUniversalCartographics).getErrorPerPixel() <= 0.0005f;
+		return TemplateMatcher.findBestMatchingLocation(rgb.subimage(0, 0, 280, 100), this.refUcLogo).getErrorPerPixel() <= 0.0005f;
 	}
 
-	public SysmapScannerResult scanSystemMap(Planar<GrayF32> rgb, String systemName) {
+	/**
+	 * Does NOT modify the rgb and hsv images!
+	 */
+	public SysmapScannerResult scanSystemMap(Planar<GrayF32> rgb, Planar<GrayF32> hsv, String systemName) {
 		// Search for the UC logo - if found, the system map is open and can be scanned
 		if (!this.waitForSystemMap(rgb)) {
 			return null;
@@ -67,43 +70,82 @@ public class SysmapScanner {
 			long scanStart = System.currentTimeMillis();
 			LinkedHashMap<TemplateMatchRgb, ScreenCoord> systemMapScreenCoords = new LinkedHashMap<>();
 
-			// First, search for locations of planets
+			// Convert to gray
 			GrayF32 gray = ConvertImage.average(rgb, null);
-			ImageMiscOps.fillRectangle(gray, 0f, 0, 0, 420, 1080); // Overwrite left panel with black
-			gray = GrayImageOps.brighten(gray, -0.1f, 1.0f, null);
-			gray = GrayImageOps.stretch(gray, 3.0f, 0.0f, 1.0f, null);
-			logger.debug("Converted to gray and enhanced contrast");
 
-			List<TemplateMatch> bodyLocations = TemplateMatcher.findAllMatchingLocations(gray, this.refGenericBody, this.refGenericBodyMask, 0.1f);
-			bodyLocations.addAll(TemplateMatcher.findAllMatchingLocations(gray, this.refGenericBody50, this.refGenericBody50Mask, 0.1f));
-			bodyLocations.addAll(TemplateMatcher.findAllMatchingLocations(gray, this.refGenericBody60, this.refGenericBody60Mask, 0.1f));
-			bodyLocations = bodyLocations.stream().sorted((m1, m2) -> new Float(m1.getErrorPerPixel()).compareTo(new Float(m2.getErrorPerPixel()))).collect(Collectors.toList());
-			logger.debug("Candidate locations found: " + bodyLocations.size());
+			// Overwrite left panel with black
+			ImageMiscOps.fillRectangle(gray, 0f, 0, 0, 420, 1080);
 
-			List<Rectangle> rects = new ArrayList<>(bodyLocations.size());
-			List<TemplateMatch> tmp = new ArrayList<>();
-			for (TemplateMatch bl : bodyLocations) {
-				Rectangle rect = new Rectangle(bl.getX(), bl.getY(), bl.getWidth(), bl.getHeight());
-				if (!intersectsWithAny(rect, rects)) {
-					tmp.add(bl);
-					rects.add(rect);
+			// Remove red-orange coronas
+			for (int y = 0; y < rgb.height; y++) {
+				for (int x = 420; x < rgb.width; x++) {
+					float s = hsv.bands[1].unsafe_get(x, y);
+					if (s >= 0.75f) {
+						float h = hsv.bands[0].unsafe_get(x, y);
+						if (h > 0.15f && h < 0.45f) {
+							float v = hsv.bands[2].unsafe_get(x, y);
+							if (v < 0.75f) {
+								gray.unsafe_set(x, y, 0f);
+							}
+						}
+					}
 				}
 			}
-			bodyLocations = tmp;
-			logger.debug("Removed intersections, " + bodyLocations.size() + " location(s) remaining");
+
+			// Enhance contrast
+			gray = GrayImageOps.brighten(gray, -0.1f, 1.0f, null);
+			gray = GrayImageOps.stretch(gray, 8.0f, 0.0f, 1.0f, null);
+			logger.debug("Converted to gray and enhanced contrast");
+
+			// Detect contours
+			GrayU8 binary = new GrayU8(gray.width, gray.height);
+			ThresholdImageOps.threshold(gray, binary, 0.40f, false);
+			binary = BinaryImageOps.erode8(binary, 2, null);
+			binary = BinaryImageOps.dilate4(binary, 2, null);
+			List<Contour> contours = BinaryImageOps.contour(binary, ConnectRule.EIGHT, null);
+			logger.debug("Contours found: " + contours.size());
+
+			// Keep only those of planet or star size, remove noise
+			List<Rectangle> rects = new ArrayList<>();
+			for (Contour c : contours) {
+				int xMin = Integer.MAX_VALUE;
+				int xMax = Integer.MIN_VALUE;
+				int yMin = Integer.MAX_VALUE;
+				int yMax = Integer.MIN_VALUE;
+				for (Point2D_I32 p : c.external) {
+					xMin = Math.min(xMin, p.x);
+					xMax = Math.max(xMax, p.x);
+					yMin = Math.min(yMin, p.y);
+					yMax = Math.max(yMax, p.y);
+				}
+				int width = xMax - xMin;
+				int height = yMax - yMin;
+				if (width >= 15 && width <= 1000 && height >= 15 && height <= 1000) {
+					rects.add(new Rectangle(xMin, yMin, width, height));
+				}
+			}
+			logger.debug("Candidate locations found: " + rects.size());
+
+			List<Rectangle> result = new ArrayList<>();
+			for (Rectangle rect : rects) {
+				if (!intersectsWithAny(rect, result)) {
+					result.add(rect);
+				}
+			}
+			logger.debug("Removed intersections, " + result.size() + " location(s) remaining");
 
 			// Try to identify the planet classes
-			for (TemplateMatch bl : bodyLocations) {
-				Planar<GrayF32> planetSubimage = rgb.subimage(bl.getX(), bl.getY(), bl.getX() + bl.getWidth(), bl.getY() + bl.getHeight());
+			for (Rectangle bl : result) {
+				Planar<GrayF32> planetSubimage = rgb.subimage(bl.x, bl.y, bl.x + bl.width, bl.y + bl.height);
 				TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(planetSubimage, this.refSysMapPlanets);
-				systemMapScreenCoords.put(bestMatch, new ScreenCoord(bl.getX() + bl.getWidth() / 2, bl.getY() + bl.getHeight() / 2));
+				systemMapScreenCoords.put(bestMatch, new ScreenCoord(bl.x + bl.width / 2, bl.y + bl.height / 2));
 			}
 			MiscUtil.sortMapByValue(systemMapScreenCoords);
 			logger.debug("Guessed planet classes");
 
 			// Finished
 			logger.info(String.format(Locale.US, "System map scan took %,d ms, found %d bodies", System.currentTimeMillis() - scanStart, systemMapScreenCoords.size()));
-			this.writeDebugImages(rgb, gray, systemName, bodyLocations);
+			this.writeDebugImages(rgb, gray, binary, systemName, result);
 			return new SysmapScannerResult(systemMapScreenCoords);
 		}
 	}
@@ -112,23 +154,16 @@ public class SysmapScanner {
 		// REF IMAGES MUST BE 1080p!!!!
 		File refDir = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref");
 		try {
-			this.refUniversalCartographics = ImageUtil
-					.normalize255(ConvertBufferedImage.convertFromMulti(ImageIO.read(new File(refDir, "universal_cartographics.png")), (Planar<GrayF32>) null, true, GrayF32.class));
-			this.refGenericBody = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body.png")), (GrayF32) null));
-			this.refGenericBodyMask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_mask.png")), (GrayF32) null));
-			this.refGenericBody50 = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_50.png")), (GrayF32) null));
-			this.refGenericBody50Mask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_50_mask.png")), (GrayF32) null));
-			this.refGenericBody60 = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_60.png")), (GrayF32) null));
-			this.refGenericBody60Mask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_60_mask.png")), (GrayF32) null));
+			this.refUcLogo = ImageUtil.normalize255(ConvertBufferedImage.convertFromMulti(ImageIO.read(new File(refDir, "uc_logo.png")), (Planar<GrayF32>) null, true, GrayF32.class));
 			this.refSysMapPlanets = TemplateRgb.fromFolder(new File(refDir, "sysMapPlanets"));
 		} catch (IOException e) {
 			logger.error("Failed to load ref images", e);
 		}
 	}
 
-	private void writeDebugImages(Planar<GrayF32> rgb, GrayF32 gray, String systemName, List<TemplateMatch> bodyLocations) {
+	private void writeDebugImages(Planar<GrayF32> rgb, GrayF32 gray, GrayU8 binary, String systemName, List<Rectangle> result) {
 		try {
-			if (this.isWriteDebugImageRgbOriginal() || this.isWriteDebugImageRgbResult() || this.isWriteDebugImageGray()) {
+			if (this.isWriteDebugImageRgbOriginal() || this.isWriteDebugImageRgbResult() || this.isWriteDebugImageGray() || this.isWriteDebugImageThreshold()) {
 				final File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
 				final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
 
@@ -140,9 +175,9 @@ public class SysmapScanner {
 					if (this.isWriteDebugImageRgbResult()) {
 						Graphics2D g = debugImage.createGraphics();
 						g.setColor(Color.CYAN);
-						for (TemplateMatch bl : bodyLocations) {
-							g.drawRect(bl.getX(), bl.getY(), bl.getWidth(), bl.getHeight());
-							g.drawString(String.format(Locale.US, "%.6f", bl.getErrorPerPixel()), bl.getX(), bl.getY());
+						for (Rectangle bl : result) {
+							g.drawRect(bl.x, bl.y, bl.width, bl.height);
+							//g.drawString(String.format(Locale.US, "%.6f", bl.getErrorPerPixel()), bl.getX(), bl.getY());
 						}
 						g.dispose();
 						ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_rgb_result " + systemName + ".png"));
@@ -152,6 +187,11 @@ public class SysmapScanner {
 				if (this.isWriteDebugImageGray()) {
 					BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(gray), null);
 					ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_gray " + systemName + ".png"));
+				}
+
+				if (this.isWriteDebugImageThreshold()) {
+					BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
+					ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_threshold " + systemName + ".png"));
 				}
 			}
 		} catch (IOException e) {
@@ -190,6 +230,14 @@ public class SysmapScanner {
 
 	public void setWriteDebugImageGray(boolean writeDebugImageGray) {
 		this.writeDebugImageGray = writeDebugImageGray;
+	}
+
+	public boolean isWriteDebugImageThreshold() {
+		return writeDebugImageThreshold;
+	}
+
+	public void setWriteDebugImageThreshold(boolean writeDebugImageThreshold) {
+		this.writeDebugImageThreshold = writeDebugImageThreshold;
 	}
 
 }

@@ -48,13 +48,14 @@ public class ScreenConverterThread extends Thread {
 			}
 
 			// Convert into relevant color bands
+			rgb = ImageUtil.normalize255(rgb);
 			ColorHsv.rgbToHsv_F32(rgb, hsv);
 			this.hsvToHudImages(hsv, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
-			rgb = ImageUtil.normalize255(rgb);
 
 			// Notify waiting threads
 			synchronized (this.screenConverterResult) {
 				this.screenConverterResult.setRgb(rgb);
+				this.screenConverterResult.setHsv(hsv);
 				this.screenConverterResult.setOrangeHudImage(orangeHudImage);
 				this.screenConverterResult.setBlueWhiteHudImage(blueWhiteHudImage);
 				this.screenConverterResult.setRedHudImage(redHudImage);
@@ -71,7 +72,7 @@ public class ScreenConverterThread extends Thread {
 			for (int x = 0; x < hsv.width; x++) {
 				float h = hsv.bands[0].unsafe_get(x, y);
 				float s = hsv.bands[1].unsafe_get(x, y);
-				float v = hsv.bands[2].unsafe_get(x, y) / 255f;
+				float v = hsv.bands[2].unsafe_get(x, y);
 
 				if ((s > 0.70f) && (v >= 0.50f) && (h >= 0.25f && h < 1.00f)) {
 					// Orange
