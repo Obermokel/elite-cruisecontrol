@@ -16,55 +16,52 @@ import borg.ed.cruisecontrol.util.ImageUtil;
 
 public class DebugPanel extends JPanel {
 
-    private static final long serialVersionUID = 8584552527591588384L;
+	private static final long serialVersionUID = 8584552527591588384L;
 
-    private BufferedImage debugImage = null;
+	private BufferedImage debugImage = null;
 
-    private GrayF32 orangeHudImage = null;
-    private GrayF32 blueWhiteHudImage = null;
-    private GrayF32 redHudImage = null;
-    private GrayF32 brightImage = null;
+	private GrayF32 orangeHudImage = null;
+	private GrayF32 blueWhiteHudImage = null;
+	private GrayF32 redHudImage = null;
+	private GrayF32 brightImage = null;
 
-    public DebugPanel() {
-    }
+	public DebugPanel() {
+	}
 
-    public void updateScreenCapture(BufferedImage debugImage, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
-        this.debugImage = debugImage;
+	public void updateScreenCapture(BufferedImage debugImage, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
+		this.debugImage = debugImage;
 
-        this.orangeHudImage = orangeHudImage;
-        this.blueWhiteHudImage = blueWhiteHudImage;
-        this.redHudImage = redHudImage;
-        this.brightImage = brightImage;
+		this.orangeHudImage = orangeHudImage;
+		this.blueWhiteHudImage = blueWhiteHudImage;
+		this.redHudImage = redHudImage;
+		this.brightImage = brightImage;
 
-        this.repaint();
-    }
+		this.repaint();
+	}
 
-    public void writeScreenCapture() {
-        try {
-            File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
-            final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
+	public void writeScreenCapture() {
+		try {
+			File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
+			final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
 
-            ImageIO.write(this.debugImage, "PNG", new File(debugFolder, ts + " 000 debug.png"));
+			ImageIO.write(this.debugImage, "PNG", new File(debugFolder, ts + " 000 debug.png"));
 
-            ImageIO.write(ConvertBufferedImage.convertTo(this.orangeHudImage, null), "PNG",
-                    new File(System.getProperty("user.home"), ts + " CruiseControlDebug 010 orange.png"));
-            ImageIO.write(ConvertBufferedImage.convertTo(this.blueWhiteHudImage, null), "PNG",
-                    new File(System.getProperty("user.home"), ts + " CruiseControlDebug 011 blue-white.png"));
-            ImageIO.write(ConvertBufferedImage.convertTo(this.redHudImage, null), "PNG",
-                    new File(System.getProperty("user.home"), ts + " CruiseControlDebug 012 red.png"));
-            ImageIO.write(ConvertBufferedImage.convertTo(this.brightImage, null), "PNG", new File(System.getProperty("user.home"), ts + " CruiseControlDebug 013 bright.png"));
-        } catch (IOException e1) {
-            e1.printStackTrace();
-        }
-    }
+			ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.orangeHudImage), null), "PNG", new File(debugFolder, ts + " CruiseControlDebug 010 orange.png"));
+			ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.blueWhiteHudImage), null), "PNG", new File(debugFolder, ts + " CruiseControlDebug 011 blue-white.png"));
+			ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.redHudImage), null), "PNG", new File(debugFolder, ts + " CruiseControlDebug 012 red.png"));
+			ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.brightImage), null), "PNG", new File(debugFolder, ts + " CruiseControlDebug 013 bright.png"));
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
+	}
 
-    @Override
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
+	@Override
+	protected void paintComponent(Graphics g) {
+		super.paintComponent(g);
 
-        if (this.debugImage != null) {
-            g.drawImage(ImageUtil.scaleTo(this.debugImage, this.getWidth(), this.getHeight()), 0, 0, null);
-        }
-    }
+		if (this.debugImage != null) {
+			g.drawImage(ImageUtil.scaleTo(this.debugImage, this.getWidth(), this.getHeight()), 0, 0, null);
+		}
+	}
 
 }

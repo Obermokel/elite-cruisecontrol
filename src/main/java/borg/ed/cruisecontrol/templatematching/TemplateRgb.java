@@ -32,7 +32,6 @@ public class TemplateRgb {
 		this.pixels = pixels;
 		this.mask = mask;
 		this.name = name;
-		System.out.println(file + " = " + name);
 	}
 
 	public static TemplateRgb fromFile(File file) throws IOException {

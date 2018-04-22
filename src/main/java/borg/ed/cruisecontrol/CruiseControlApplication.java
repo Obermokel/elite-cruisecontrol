@@ -26,6 +26,7 @@ public class CruiseControlApplication {
 	public static final int SCALED_WIDTH = 1920;
 	public static final int SCALED_HEIGHT = 1080;
 	public static final float MAX_FUEL = 32f;
+	public static final boolean JONK_MODE = true;
 
 	public static void main(String[] args) throws AWTException {
 		GraphicsDevice primaryScreen = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
