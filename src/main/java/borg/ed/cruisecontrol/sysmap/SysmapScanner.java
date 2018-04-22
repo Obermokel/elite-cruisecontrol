@@ -46,9 +46,9 @@ public class SysmapScanner {
 	private GrayF32 refGenericBody60Mask = null;
 	private List<TemplateRgb> refSysMapPlanets = null;
 
-	private boolean writeOriginalRgbImage = false;
-	private boolean writeGrayDebugImage = false;
-	private boolean writeRgbResultDebugImage = false;
+	private boolean writeDebugImageRgbOriginal = false;
+	private boolean writeDebugImageRgbResult = false;
+	private boolean writeDebugImageGray = false;
 
 	public SysmapScanner() {
 		this.reloadTemplates();
@@ -128,16 +128,16 @@ public class SysmapScanner {
 
 	private void writeDebugImages(Planar<GrayF32> rgb, GrayF32 gray, String systemName, List<TemplateMatch> bodyLocations) {
 		try {
-			if (this.isWriteOriginalRgbImage() || this.isWriteRgbResultDebugImage() || this.isWriteGrayDebugImage()) {
+			if (this.isWriteDebugImageRgbOriginal() || this.isWriteDebugImageRgbResult() || this.isWriteDebugImageGray()) {
 				final File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
 				final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
 
-				if (this.isWriteOriginalRgbImage() || this.isWriteRgbResultDebugImage()) {
+				if (this.isWriteDebugImageRgbOriginal() || this.isWriteDebugImageRgbResult()) {
 					BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
-					if (this.isWriteOriginalRgbImage()) {
+					if (this.isWriteDebugImageRgbOriginal()) {
 						ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_rgb_original " + systemName + ".png"));
 					}
-					if (this.isWriteRgbResultDebugImage()) {
+					if (this.isWriteDebugImageRgbResult()) {
 						Graphics2D g = debugImage.createGraphics();
 						g.setColor(Color.CYAN);
 						for (TemplateMatch bl : bodyLocations) {
@@ -149,7 +149,7 @@ public class SysmapScanner {
 					}
 				}
 
-				if (this.isWriteGrayDebugImage()) {
+				if (this.isWriteDebugImageGray()) {
 					BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(gray), null);
 					ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_gray " + systemName + ".png"));
 				}
@@ -168,28 +168,28 @@ public class SysmapScanner {
 		return false;
 	}
 
-	public boolean isWriteOriginalRgbImage() {
-		return writeOriginalRgbImage;
+	public boolean isWriteDebugImageRgbOriginal() {
+		return writeDebugImageRgbOriginal;
 	}
 
-	public void setWriteOriginalRgbImage(boolean writeOriginalRgbImage) {
-		this.writeOriginalRgbImage = writeOriginalRgbImage;
+	public void setWriteDebugImageRgbOriginal(boolean writeDebugImageRgbOriginal) {
+		this.writeDebugImageRgbOriginal = writeDebugImageRgbOriginal;
 	}
 
-	public boolean isWriteGrayDebugImage() {
-		return writeGrayDebugImage;
+	public boolean isWriteDebugImageRgbResult() {
+		return writeDebugImageRgbResult;
 	}
 
-	public void setWriteGrayDebugImage(boolean writeGrayDebugImage) {
-		this.writeGrayDebugImage = writeGrayDebugImage;
+	public void setWriteDebugImageRgbResult(boolean writeDebugImageRgbResult) {
+		this.writeDebugImageRgbResult = writeDebugImageRgbResult;
 	}
 
-	public boolean isWriteRgbResultDebugImage() {
-		return writeRgbResultDebugImage;
+	public boolean isWriteDebugImageGray() {
+		return writeDebugImageGray;
 	}
 
-	public void setWriteRgbResultDebugImage(boolean writeRgbResultDebugImage) {
-		this.writeRgbResultDebugImage = writeRgbResultDebugImage;
+	public void setWriteDebugImageGray(boolean writeDebugImageGray) {
+		this.writeDebugImageGray = writeDebugImageGray;
 	}
 
 }

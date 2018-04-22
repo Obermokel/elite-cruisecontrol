@@ -121,6 +121,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		this.screenRect = screenRect;
 		this.universeService = universeService;
 		this.shipControl = new ShipControl(robot);
+
+		this.sysmapScanner.setWriteDebugImageRgbOriginal(CruiseControlApplication.WRITE_SYSMAP_DEBUG_RGB_ORIGINAL);
+		this.sysmapScanner.setWriteDebugImageRgbResult(CruiseControlApplication.WRITE_SYSMAP_DEBUG_RGB_RESULT);
+		this.sysmapScanner.setWriteDebugImageGray(CruiseControlApplication.WRITE_SYSMAP_DEBUG_GRAY);
 	}
 
 	@Override
