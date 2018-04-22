@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.Callable;
@@ -28,15 +27,13 @@ import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import boofcv.alg.filter.basic.GrayImageOps;
-import boofcv.core.image.ConvertImage;
 import boofcv.io.image.ConvertBufferedImage;
 import boofcv.struct.image.GrayF32;
-import boofcv.struct.image.Planar;
+import borg.ed.cruisecontrol.sysmap.SysmapScanner;
+import borg.ed.cruisecontrol.sysmap.SysmapScannerResult;
 import borg.ed.cruisecontrol.templatematching.TemplateMatch;
 import borg.ed.cruisecontrol.templatematching.TemplateMatchRgb;
 import borg.ed.cruisecontrol.templatematching.TemplateMatcher;
-import borg.ed.cruisecontrol.templatematching.TemplateRgb;
 import borg.ed.cruisecontrol.util.ImageUtil;
 import borg.ed.universe.journal.JournalReaderThread;
 import borg.ed.universe.journal.JournalUpdateListener;
@@ -62,6 +59,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private final Rectangle screenRect;
 	private final UniverseService universeService;
 	private final ShipControl shipControl;
+	private final SysmapScanner sysmapScanner = new SysmapScanner();
 
 	private GrayF32 refCompass = null;
 	private GrayF32 refCompassMask = null;
@@ -69,17 +67,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private GrayF32 refCompassDotHollow = null;
 	private GrayF32 refTarget = null;
 	private GrayF32 refTargetMask = null;
-	private Planar<GrayF32> refUniversalCartographics = null;
 	private GrayF32 refShipHud = null;
-	private GrayF32 refGenericBody = null;
-	private GrayF32 refGenericBodyMask = null;
-	private GrayF32 refGenericBody50 = null;
-	private GrayF32 refGenericBody50Mask = null;
-	private GrayF32 refGenericBody60 = null;
-	private GrayF32 refGenericBody60Mask = null;
 	private GrayF32 refSixSeconds = null;
 	private GrayF32 refScanning = null;
-	private List<TemplateRgb> refSysMapPlanets = null;
 
 	private GameState gameState = GameState.UNKNOWN;
 	private long jumpInitiated = 0;
@@ -100,8 +90,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private String currentSystemName = "";
 	private List<Body> knownValuableBodies = new ArrayList<>();
 	private int discoveredBodiesInSystem = 0;
-	private LinkedHashMap<TemplateMatchRgb, ScreenCoord> systemMapScreenCoords = new LinkedHashMap<>();
 	private TemplateMatchRgb currentBodyTemplateMatch = null;
+	private SysmapScannerResult sysmapScannerResult = null;
 	private long lastTick = System.currentTimeMillis();
 
 	private static final int COMPASS_REGION_X = 620;
@@ -382,8 +372,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					break;
 				case SCAN_SYSTEM_MAP:
 					synchronized (screenConverterResult) {
-						if (this.scanSystemMap(screenConverterResult.getRgb().clone())) {
-							if (this.systemMapScreenCoords.isEmpty()) {
+						this.sysmapScannerResult = this.sysmapScanner.scanSystemMap(screenConverterResult.getRgb().clone(), this.currentSystemName);
+						if (this.sysmapScannerResult != null) {
+							if (this.sysmapScannerResult.getSystemMapScreenCoords().isEmpty()) {
+								// Close sysmap, then throttle up and go to next system in route
 								this.shipControl.toggleSystemMap();
 								Thread.sleep(1000);
 								this.shipControl.setThrottle(100);
@@ -391,6 +383,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 								this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
 								logger.debug("System map scanned, no bodies recognized, aligning to next jump target at 100% throttle");
 							} else {
+								// Select body from sysmap, then close map and wait for ship HUD
 								this.clickOnNextBodyOnSystemMap();
 								this.shipControl.toggleSystemMap();
 								this.shipControl.setThrottle(0);
@@ -465,7 +458,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					break;
 				case WAIT_FOR_SYSTEM_MAP:
 					synchronized (screenConverterResult) {
-						if (this.waitForSystemMap(screenConverterResult.getRgb().clone())) {
+						if (this.sysmapScanner.waitForSystemMap(screenConverterResult.getRgb().clone())) {
 							this.clickOnNextBodyOnSystemMap();
 							this.shipControl.toggleSystemMap();
 							this.shipControl.setThrottle(0);
@@ -516,88 +509,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 	private boolean waitForShipHud(GrayF32 orangeHudImage) {
 		return TemplateMatcher.findBestMatchingLocation(orangeHudImage.subimage(1650, 900, 1900, 1050), this.refShipHud).getErrorPerPixel() <= 0.05f;
-	}
-
-	private boolean waitForSystemMap(Planar<GrayF32> rgb) {
-		return TemplateMatcher.findBestMatchingLocation(rgb.subimage(0, 0, 280, 100), this.refUniversalCartographics).getErrorPerPixel() <= 0.0005f;
-	}
-
-	private boolean scanSystemMap(Planar<GrayF32> rgb) {
-		this.systemMapScreenCoords.clear();
-		long scanStart = System.currentTimeMillis();
-
-		// Search for the UC logo - if found, the system map is open and can be scanned
-		boolean foundUniversalCartographicsLogo = false;
-		float bmepp = TemplateMatcher.findBestMatchingLocation(rgb.subimage(0, 0, 280, 100), this.refUniversalCartographics).getErrorPerPixel();
-		if (bmepp <= 0.0005f) {
-			foundUniversalCartographicsLogo = true;
-		}
-
-		if (foundUniversalCartographicsLogo) {
-			// First, search for locations of planets
-			logger.debug("Convert to gray and enhance contrast");
-			GrayF32 gray = ConvertImage.average(rgb, null);
-			gray = GrayImageOps.brighten(gray, -0.1f, 1.0f, null);
-			gray = GrayImageOps.stretch(gray, 3.0f, 0.0f, 1.0f, null);
-			logger.debug("Start searchring for locations");
-			List<TemplateMatch> bodyLocations = TemplateMatcher.findAllMatchingLocations(gray, this.refGenericBody, this.refGenericBodyMask, 0.1f);
-			bodyLocations.addAll(TemplateMatcher.findAllMatchingLocations(gray, this.refGenericBody50, this.refGenericBody50Mask, 0.1f));
-			bodyLocations.addAll(TemplateMatcher.findAllMatchingLocations(gray, this.refGenericBody60, this.refGenericBody60Mask, 0.1f));
-			logger.debug("Locations found: " + bodyLocations.size());
-			bodyLocations = bodyLocations.stream().filter(m -> m.getX() >= 420).sorted((m1, m2) -> new Float(m1.getErrorPerPixel()).compareTo(new Float(m2.getErrorPerPixel())))
-					.collect(Collectors.toList());
-			logger.debug("Filtered and sorted by epp");
-			List<Rectangle> rects = new ArrayList<>(bodyLocations.size());
-			List<TemplateMatch> tmp = new ArrayList<>();
-			for (TemplateMatch bl : bodyLocations) {
-				Rectangle rect = new Rectangle(bl.getX(), bl.getY(), bl.getWidth(), bl.getHeight());
-				if (!intersectsWithAny(rect, rects)) {
-					tmp.add(bl);
-					rects.add(rect);
-				}
-			}
-			bodyLocations = tmp;
-			logger.debug("Removed intersections, remaining = " + bodyLocations.size());
-
-			// Try to identify the planet classes
-			for (TemplateMatch bl : bodyLocations) {
-				Planar<GrayF32> planetSubimage = rgb.subimage(bl.getX(), bl.getY(), bl.getX() + bl.getWidth(), bl.getY() + bl.getHeight());
-				TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(planetSubimage, this.refSysMapPlanets);
-				this.systemMapScreenCoords.put(bestMatch, new ScreenCoord(bl.getX() + bl.getWidth() / 2, bl.getY() + bl.getHeight() / 2));
-			}
-			MiscUtil.sortMapByValue(this.systemMapScreenCoords);
-			logger.debug("Guessed planet classes");
-
-			// Debug
-			logger.info(String.format(Locale.US, "System map scan took %,d ms, found %d bodies", System.currentTimeMillis() - scanStart, this.systemMapScreenCoords.size()));
-
-			try {
-				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
-				Graphics2D g = debugImage.createGraphics();
-				g.setColor(Color.CYAN);
-				for (TemplateMatch bl : bodyLocations) {
-					g.drawRect(bl.getX(), bl.getY(), bl.getWidth(), bl.getHeight());
-					g.drawString(String.format(Locale.US, "%.6f", bl.getErrorPerPixel()), bl.getX(), bl.getY());
-				}
-				g.dispose();
-				File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
-				final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
-				ImageIO.write(debugImage, "PNG", new File(debugFolder, ts + " System map debug " + this.currentSystemName + ".png"));
-			} catch (IOException e) {
-				logger.warn("Failed to write debug image", e);
-			}
-		}
-
-		return foundUniversalCartographicsLogo;
-	}
-
-	private boolean intersectsWithAny(Rectangle rect, List<Rectangle> rects) {
-		for (Rectangle other : rects) {
-			if (rect.intersects(other)) {
-				return true;
-			}
-		}
-		return false;
 	}
 
 	private void doEmergencyExit(String reason) {
@@ -949,7 +860,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	}
 
 	private void loadRefImages() {
-		// REF IMAGES MUST BE 1440p!!!!
+		// REF IMAGES MUST BE 1080p!!!!
 		File refDir = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref");
 		try {
 			this.refCompass = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "compass_orange.png")), (GrayF32) null));
@@ -958,18 +869,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			this.refCompassDotHollow = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "compass_dot_hollow_bluewhite.png")), (GrayF32) null));
 			this.refTarget = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "target.png")), (GrayF32) null));
 			this.refTargetMask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "target_mask.png")), (GrayF32) null));
-			this.refUniversalCartographics = ImageUtil
-					.normalize255(ConvertBufferedImage.convertFromMulti(ImageIO.read(new File(refDir, "universal_cartographics.png")), (Planar<GrayF32>) null, true, GrayF32.class));
 			this.refShipHud = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "ship_hud.png")), (GrayF32) null));
-			this.refGenericBody = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body.png")), (GrayF32) null));
-			this.refGenericBodyMask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_mask.png")), (GrayF32) null));
-			this.refGenericBody50 = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_50.png")), (GrayF32) null));
-			this.refGenericBody50Mask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_50_mask.png")), (GrayF32) null));
-			this.refGenericBody60 = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_60.png")), (GrayF32) null));
-			this.refGenericBody60Mask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "generic_body_60_mask.png")), (GrayF32) null));
 			this.refSixSeconds = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "six_seconds.png")), (GrayF32) null));
 			this.refScanning = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "scanning.png")), (GrayF32) null));
-			this.refSysMapPlanets = TemplateRgb.fromFolder(new File(refDir, "sysMapPlanets"));
 		} catch (IOException e) {
 			throw new RuntimeException("Failed to load ref images", e);
 		}
@@ -1042,10 +944,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		}
 		g.drawString(String.format(Locale.US, "knownBodies=%d%s", this.discoveredBodiesInSystem, sbKnownValuableBodies), 10, 270);
 		StringBuilder sbGuessedBodies = new StringBuilder();
-		for (TemplateMatchRgb tm : this.systemMapScreenCoords.keySet()) {
-			sbGuessedBodies.append(String.format(Locale.US, " | %s", tm.getTemplate().getName()));
+		if (this.sysmapScannerResult != null) {
+			for (TemplateMatchRgb tm : this.sysmapScannerResult.getSystemMapScreenCoords().keySet()) {
+				sbGuessedBodies.append(String.format(Locale.US, " | %s", tm.getTemplate().getName()));
+			}
 		}
-		g.drawString(String.format(Locale.US, "guessedBodies=%d%s", this.systemMapScreenCoords.size(), sbGuessedBodies), 10, 300);
+		g.drawString(String.format(Locale.US, "guessedBodies=%d%s", this.sysmapScannerResult == null ? 0 : this.sysmapScannerResult.getSystemMapScreenCoords().size(), sbGuessedBodies), 10,
+				300);
 
 		g.dispose();
 	}
@@ -1127,7 +1032,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					.filter(b -> b.getDistanceToArrival().longValue() < 10000 && BodyUtil.estimatePayout(b) >= 100000)
 					.sorted((b1, b2) -> (b1.getName().toLowerCase().compareTo(b2.getName().toLowerCase()))).collect(Collectors.toList());
 			this.discoveredBodiesInSystem = 0;
-			this.systemMapScreenCoords.clear();
+			this.sysmapScannerResult = null;
 			this.gameState = GameState.IN_HYPERSPACE;
 			logger.debug("Jumping through hyperspace to " + ((StartJumpEvent) event).getStarSystem());
 		} else if (event instanceof FSDJumpEvent) {
@@ -1168,7 +1073,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 				this.currentBodyTemplateMatch = null;
 				this.knownValuableBodies = this.knownValuableBodies.stream().filter(b -> !b.getName().equals(((ScanEvent) event).getBodyName())).collect(Collectors.toList());
-				if (this.systemMapScreenCoords.isEmpty()) {
+				if (this.sysmapScannerResult.getSystemMapScreenCoords().isEmpty()) {
 					this.shipControl.setThrottle(100);
 					this.shipControl.selectNextSystemInRoute();
 					this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
@@ -1185,8 +1090,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	}
 
 	private void clickOnNextBodyOnSystemMap() {
-		this.currentBodyTemplateMatch = this.systemMapScreenCoords.keySet().iterator().next();
-		ScreenCoord scaledCoords = this.systemMapScreenCoords.remove(this.currentBodyTemplateMatch);
+		this.currentBodyTemplateMatch = this.sysmapScannerResult.getSystemMapScreenCoords().keySet().iterator().next();
+		ScreenCoord scaledCoords = this.sysmapScannerResult.getSystemMapScreenCoords().remove(this.currentBodyTemplateMatch);
 		int screenX = Math.round(scaledCoords.x * (2560f / 1920f)) + ((3440 - 2560) / 2); // FIXME
 		int screenY = Math.round(scaledCoords.y * (1440f / 1080f)); // FIXME
 
