@@ -14,7 +14,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Locale;
+import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,11 +31,11 @@ import org.slf4j.LoggerFactory;
 
 import boofcv.io.image.ConvertBufferedImage;
 import boofcv.struct.image.GrayF32;
+import borg.ed.cruisecontrol.sysmap.SysmapBody;
 import borg.ed.cruisecontrol.sysmap.SysmapScanner;
 import borg.ed.cruisecontrol.sysmap.SysmapScannerResult;
 import borg.ed.cruisecontrol.templatematching.Template;
 import borg.ed.cruisecontrol.templatematching.TemplateMatch;
-import borg.ed.cruisecontrol.templatematching.TemplateMatchRgb;
 import borg.ed.cruisecontrol.templatematching.TemplateMatcher;
 import borg.ed.cruisecontrol.util.ImageUtil;
 import borg.ed.universe.journal.JournalReaderThread;
@@ -63,27 +65,20 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     private final SysmapScanner sysmapScanner = new SysmapScanner();
 
     private Template refCompass = null;
-    private Template refCompassMask = null;
     private Template refCompassDotFilled = null;
     private Template refCompassDotHollow = null;
     private Template refTarget = null;
-    private Template refTargetMask = null;
     private Template refShipHud = null;
     private Template refSixSeconds = null;
     private Template refScanning = null;
 
     private GameState gameState = GameState.UNKNOWN;
-    private long jumpInitiated = 0;
-    private long honkInitiated = 0;
-    private long escapeInitiated = 0;
     private int xPercent = 0;
     private int yPercent = 0;
-    private boolean hollow = false;
     private float brightnessAhead = 0;
     private boolean scoopingFuel = false;
     private boolean fsdCooldown = false;
     private float fuelLevel = 0;
-    private long inSupercruiseSince = Long.MAX_VALUE;
     private long inHyperspaceSince = Long.MAX_VALUE; // Timestamp when the FSD was charged and the countdown started
     private long escapingFromStarSince = Long.MAX_VALUE;
     private boolean fsdCharging = false;
@@ -91,7 +86,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     private String currentSystemName = "";
     private List<Body> knownValuableBodies = new ArrayList<>();
     private int discoveredBodiesInSystem = 0;
-    private TemplateMatchRgb currentBodyTemplateMatch = null;
+    private SysmapBody currentSysmapBody = null;
     private SysmapScannerResult sysmapScannerResult = null;
     private long lastTick = System.currentTimeMillis();
 
@@ -125,7 +120,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
         this.sysmapScanner.setWriteDebugImageRgbOriginal(CruiseControlApplication.WRITE_SYSMAP_DEBUG_RGB_ORIGINAL);
         this.sysmapScanner.setWriteDebugImageRgbResult(CruiseControlApplication.WRITE_SYSMAP_DEBUG_RGB_RESULT);
-        this.sysmapScanner.setWriteDebugImageGray(CruiseControlApplication.WRITE_SYSMAP_DEBUG_GRAY);
+        this.sysmapScanner.setWriteDebugImageBodyRgbOriginal(CruiseControlApplication.WRITE_SYSMAP_DEBUG_BODY_RGB_ORIGINAL);
+        this.sysmapScanner.setWriteDebugImageBodyRgbResult(CruiseControlApplication.WRITE_SYSMAP_DEBUG_BODY_RGB_RESULT);
     }
 
     @Override
@@ -373,7 +369,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                         synchronized (screenConverterResult) {
                             this.sysmapScannerResult = this.sysmapScanner.scanSystemMap(screenConverterResult.getRgb(), screenConverterResult.getHsv(), this.currentSystemName);
                             if (this.sysmapScannerResult != null) {
-                                if (this.sysmapScannerResult.getSystemMapScreenCoords().isEmpty()) {
+                                if (this.sysmapScannerResult.getBodies().isEmpty()) {
                                     // Close sysmap, then throttle up and go to next system in route
                                     this.shipControl.toggleSystemMap();
                                     Thread.sleep(1000);
@@ -684,7 +680,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             int y = (compassDotMatch.getY() - compassMatch.getY()) + (compassDotMatch.getHeight() / 2);
             xPercent = (x * 100) / width;
             yPercent = (y * 100) / height;
-            this.hollow = hollow;
 
             if (!hollow && xPercent >= 48 && xPercent <= 52 && yPercent >= 48 && yPercent <= 52) {
                 this.shipControl.stopTurning();
@@ -749,7 +744,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             int y = (compassDotMatch.getY() - compassMatch.getY()) + (compassDotMatch.getHeight() / 2);
             xPercent = (x * 100) / width;
             yPercent = (y * 100) / height;
-            this.hollow = hollow;
 
             if (hollow && xPercent >= 45 && xPercent <= 55 && (yPercent > 80 || yPercent < 20)) {
                 this.shipControl.stopTurning();
@@ -898,11 +892,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         g.drawString(String.format(Locale.US, "knownBodies=%d%s", this.discoveredBodiesInSystem, sbKnownValuableBodies), 10, 270);
         StringBuilder sbGuessedBodies = new StringBuilder();
         if (this.sysmapScannerResult != null) {
-            for (TemplateMatchRgb tm : this.sysmapScannerResult.getSystemMapScreenCoords().keySet()) {
-                sbGuessedBodies.append(String.format(Locale.US, " | %s", tm.getTemplate().getName()));
+            for (SysmapBody b : this.sysmapScannerResult.getBodies()) {
+                sbGuessedBodies.append(String.format(Locale.US, " | %s", b.bestBodyMatch.getTemplate().getName()));
             }
         }
-        g.drawString(String.format(Locale.US, "guessedBodies=%d%s", this.sysmapScannerResult == null ? 0 : this.sysmapScannerResult.getSystemMapScreenCoords().size(), sbGuessedBodies), 10,
+        g.drawString(String.format(Locale.US, "guessedBodies=%d%s", this.sysmapScannerResult == null ? 0 : this.sysmapScannerResult.getBodies().size(), sbGuessedBodies), 10,
                 300);
 
         g.dispose();
@@ -978,7 +972,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     public void onNewJournalEntry(AbstractJournalEvent event) {
         if (event instanceof StartJumpEvent) {
             this.shipControl.stopTurning();
-            this.inSupercruiseSince = Long.MAX_VALUE;
             this.inHyperspaceSince = System.currentTimeMillis();
             this.currentSystemName = ((StartJumpEvent) event).getStarSystem();
             this.knownValuableBodies = this.universeService.findBodiesByStarSystemName(((StartJumpEvent) event).getStarSystem()).stream()
@@ -992,7 +985,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             this.loadRefImages();
             this.fuelLevel = ((FSDJumpEvent) event).getFuelLevel().floatValue();
             this.inHyperspaceSince = Long.MAX_VALUE;
-            this.inSupercruiseSince = System.currentTimeMillis();
             this.shipControl.honkDelayed(1000);
             this.gameState = GameState.WAIT_FOR_FSD_COOLDOWN;
             logger.debug("Arrived at " + ((FSDJumpEvent) event).getStarSystem() + ", honking and waiting for FSD cooldown to start");
@@ -1001,21 +993,25 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         } else if (event instanceof DiscoveryScanEvent) {
             this.discoveredBodiesInSystem += MiscUtil.getAsInt(((DiscoveryScanEvent) event).getBodies(), 0);
         } else if (event instanceof ScanEvent) {
-            if (this.currentBodyTemplateMatch != null) {
+            if (this.currentSysmapBody != null) {
                 this.shipControl.setThrottle(0);
                 this.shipControl.stopTurning();
                 String realPlanetClass = ((ScanEvent) event).getPlanetClass();
-                String guessedPlanetClass = this.currentBodyTemplateMatch.getTemplate().getName();
+                if (StringUtils.isEmpty(realPlanetClass)) {
+                    realPlanetClass = "Class " + ((ScanEvent) event).getStarType() + " star";
+                }
+                String guessedPlanetClass = this.currentSysmapBody.bestBodyMatch.getTemplate().getName();
                 if (StringUtils.isNotEmpty(realPlanetClass) && !realPlanetClass.equals(guessedPlanetClass)) {
                     logger.warn("Wrongly guessed " + guessedPlanetClass + ", but was " + realPlanetClass);
                     try {
-                        BufferedImage planetImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(this.currentBodyTemplateMatch.getImage()), null, true);
+                        BufferedImage planetImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(this.currentSysmapBody.bestBodyMatch.getImage()), null,
+                                true);
                         File refFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/sysMapPlanets/" + realPlanetClass);
                         if (!refFolder.exists()) {
                             refFolder.mkdirs();
                         }
                         final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
-                        ImageIO.write(planetImage, "PNG", new File(refFolder, ts + " " + realPlanetClass + " " + this.currentSystemName + ".png"));
+                        ImageIO.write(planetImage, "PNG", new File(refFolder, realPlanetClass + " " + ts + " " + this.currentSystemName + ".png"));
                         this.loadRefImages();
                     } catch (IOException e) {
                         logger.warn("Failed to write planet ref image", e);
@@ -1024,9 +1020,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                     logger.info("Correctly guessed " + guessedPlanetClass + ", and was " + realPlanetClass);
                 }
 
-                this.currentBodyTemplateMatch = null;
+                this.currentSysmapBody = null;
                 this.knownValuableBodies = this.knownValuableBodies.stream().filter(b -> !b.getName().equals(((ScanEvent) event).getBodyName())).collect(Collectors.toList());
-                if (this.sysmapScannerResult.getSystemMapScreenCoords().isEmpty()) {
+                if (this.sysmapScannerResult.getBodies().isEmpty()) {
                     this.shipControl.setThrottle(100);
                     this.shipControl.selectNextSystemInRoute();
                     this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
@@ -1043,23 +1039,38 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     }
 
     private void clickOnNextBodyOnSystemMap() {
-        this.currentBodyTemplateMatch = this.sysmapScannerResult.getSystemMapScreenCoords().keySet().iterator().next();
-        ScreenCoord scaledCoords = this.sysmapScannerResult.getSystemMapScreenCoords().remove(this.currentBodyTemplateMatch);
-        int screenX = Math.round(scaledCoords.x * (2560f / 1920f)) + ((3440 - 2560) / 2); // FIXME
-        int screenY = Math.round(scaledCoords.y * (1440f / 1080f)); // FIXME
+        this.currentSysmapBody = this.sysmapScannerResult.getBodies().remove(0);
+
+        // We accept one scan without known or large distance. But now remove all of those bodies.
+        ListIterator<SysmapBody> it = this.sysmapScannerResult.getBodies().listIterator();
+        while (it.hasNext()) {
+            SysmapBody b = it.next();
+            if (b.distanceLs == null || b.distanceLs.floatValue() > 12345f) {
+                it.remove();
+            }
+        }
 
         try {
-            Thread.sleep(1000);
-            this.robot.mouseMove(screenX, screenY);
+            Thread.sleep(1000); // TODO Necessary?
+
+            Random random = new Random();
+
+            // Click on body
+            this.robot.mouseMove((this.currentSysmapBody.centerOnScreen.x - 5) + random.nextInt(10),
+                    (this.currentSysmapBody.centerOnScreen.y - 5) + random.nextInt(10));
             Thread.sleep(100);
-            this.robot.mouseMove(screenX + 1, screenY + 1);
-            Thread.sleep(500);
+            this.robot.mouseMove((this.currentSysmapBody.centerOnScreen.x - 5) + random.nextInt(10),
+                    (this.currentSysmapBody.centerOnScreen.y - 5) + random.nextInt(10));
+            Thread.sleep(100);
             this.robot.mousePress(InputEvent.getMaskForButton(1));
             Thread.sleep(100);
             this.robot.mouseRelease(InputEvent.getMaskForButton(1));
-            Thread.sleep(2000);
-            this.robot.mouseMove(3440 / 2, 1440 / 2); // FIXME
-            Thread.sleep(500);
+
+            Thread.sleep(2000); // Wait for map to scroll
+            this.robot.mouseMove(this.screenRect.width / 2, this.screenRect.height / 2); // Move mouse to now centered planet
+            Thread.sleep(500); // Wait for tooltip to appear
+
+            // Select as target (ENTER, scroll right, scroll left, ENTER again)
             this.robot.keyPress(KeyEvent.VK_ENTER);
             Thread.sleep(100);
             this.robot.keyRelease(KeyEvent.VK_ENTER);
@@ -1075,9 +1086,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             this.robot.keyPress(KeyEvent.VK_ENTER);
             Thread.sleep(100);
             this.robot.keyRelease(KeyEvent.VK_ENTER);
-            Thread.sleep(1000);
+
+            Thread.sleep(1000); // TODO Necessary?
         } catch (InterruptedException e) {
-            logger.warn("Interrupted while clicked on system map", e);
+            logger.warn("Interrupted while clicking on system map", e);
         }
     }
 

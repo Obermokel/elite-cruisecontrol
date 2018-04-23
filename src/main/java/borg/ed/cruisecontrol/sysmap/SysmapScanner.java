@@ -2,16 +2,23 @@ package borg.ed.cruisecontrol.sysmap;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.Robot;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Random;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import javax.imageio.ImageIO;
 
@@ -30,27 +37,50 @@ import boofcv.struct.ConnectRule;
 import boofcv.struct.image.GrayF32;
 import boofcv.struct.image.GrayU8;
 import boofcv.struct.image.Planar;
-import borg.ed.cruisecontrol.ScreenCoord;
+import borg.ed.cruisecontrol.CruiseControlApplication;
+import borg.ed.cruisecontrol.ScreenConverterResult;
+import borg.ed.cruisecontrol.templatematching.Template;
+import borg.ed.cruisecontrol.templatematching.TemplateMatch;
 import borg.ed.cruisecontrol.templatematching.TemplateMatchRgb;
 import borg.ed.cruisecontrol.templatematching.TemplateMatcher;
 import borg.ed.cruisecontrol.templatematching.TemplateRgb;
 import borg.ed.cruisecontrol.util.ImageUtil;
-import borg.ed.universe.util.MiscUtil;
+import borg.ed.cruisecontrol.util.MouseUtil;
 import georegression.struct.point.Point2D_I32;
 
 public class SysmapScanner {
 
     static final Logger logger = LoggerFactory.getLogger(SysmapScanner.class);
 
+    private Robot robot = null;
+    private Rectangle screenRect = null;
+    private ScreenConverterResult screenConverterResult = null;
+
     private TemplateRgb refUcLogo = null;
-    private List<TemplateRgb> refSysMapPlanets = null;
+    private Template refUnexplored = null;
+    private Template refArrivalPoint = null;
+    private Template refEarthMasses = null;
+    private Template refRadius = null;
+    private List<Template> textTemplates = null;
+    private List<TemplateRgb> refSysMapBodies = null;
 
     private boolean writeDebugImageRgbOriginal = false;
     private boolean writeDebugImageRgbResult = false;
     private boolean writeDebugImageGray = false;
     private boolean writeDebugImageThreshold = false;
+    private boolean writeDebugImageBodyRgbOriginal = false;
+    private boolean writeDebugImageBodyRgbResult = false;
+    private boolean writeDebugImageBodyGray = false;
 
     public SysmapScanner() {
+        this(null, null, null);
+    }
+
+    public SysmapScanner(Robot robot, Rectangle screenRect, ScreenConverterResult screenConverterResult) {
+        this.robot = robot;
+        this.screenRect = screenRect;
+        this.screenConverterResult = screenConverterResult;
+
         this.reloadTemplates();
     }
 
@@ -68,7 +98,6 @@ public class SysmapScanner {
         } else {
             logger.debug("Start scanning system map");
             long scanStart = System.currentTimeMillis();
-            LinkedHashMap<TemplateMatchRgb, ScreenCoord> systemMapScreenCoords = new LinkedHashMap<>();
 
             // Convert to gray
             GrayF32 gray = ConvertImage.average(rgb, null);
@@ -126,77 +155,211 @@ public class SysmapScanner {
             }
             logger.debug("Candidate locations found: " + rects.size());
 
-            List<Rectangle> result = new ArrayList<>();
+            List<SysmapBody> bodies = new ArrayList<>();
             for (Rectangle rect : rects) {
-                if (!intersectsWithAny(rect, result)) {
-                    result.add(rect);
+                SysmapBody b = new SysmapBody(rect);
+                if (!SysmapBody.intersectsWithAny(b, bodies)) {
+                    bodies.add(b);
                 }
             }
-            logger.debug("Removed intersections, " + result.size() + " location(s) remaining");
+            logger.debug("Removed intersections, " + bodies.size() + " location(s) remaining");
 
-            // Try to identify the planet classes
-            for (Rectangle bl : result) {
-                Planar<GrayF32> planetSubimage = rgb.subimage(bl.x, bl.y, bl.x + bl.width, bl.y + bl.height);
-                TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(planetSubimage, this.refSysMapPlanets);
-                systemMapScreenCoords.put(bestMatch, new ScreenCoord(bl.x + bl.width / 2, bl.y + bl.height / 2));
+            // If we have control over the computer move the mouse over the found locations to get distance information
+            if (!bodies.isEmpty() && this.robot != null && this.screenRect != null && this.screenConverterResult != null) {
+                try {
+                    this.hoverOverBodiesAndExtractData(bodies);
+                } catch (Exception e) {
+                    logger.error("Failed to extract body information", e);
+                }
             }
-            MiscUtil.sortMapByValue(systemMapScreenCoords);
-            logger.debug("Guessed planet classes");
+
+            // Try to identify the body types
+            for (SysmapBody b : bodies) {
+                Planar<GrayF32> bodyImage = rgb.subimage(b.areaInImage.x, b.areaInImage.y, b.areaInImage.x + b.areaInImage.width, b.areaInImage.y + b.areaInImage.height);
+                TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(bodyImage, this.refSysMapBodies);
+                b.bestBodyMatch = bestMatch;
+            }
+            logger.debug("Guessed body types");
+
+            // Sort
+            Collections.sort(bodies, new SensibleScanOrderComparator());
 
             // Finished
-            logger.info(String.format(Locale.US, "System map scan took %,d ms, found %d bodies", System.currentTimeMillis() - scanStart, systemMapScreenCoords.size()));
-            this.writeDebugImages(rgb, gray, binary, systemName, result);
-            return new SysmapScannerResult(systemMapScreenCoords);
+            logger.info(String.format(Locale.US, "System map scan took %,d ms, found %d bodies", System.currentTimeMillis() - scanStart, bodies.size()));
+            this.writeDebugImages(rgb, gray, binary, systemName, bodies);
+            return new SysmapScannerResult(bodies);
         }
     }
 
-    public void reloadTemplates() {
-        // REF IMAGES MUST BE 1080p!!!!
-        File refDir = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref");
-        try {
-            this.refUcLogo = TemplateRgb.fromFile(new File(refDir, "uc_logo.png"));
-            this.refSysMapPlanets = TemplateRgb.fromFolder(new File(refDir, "sysMapPlanets"));
-        } catch (IOException e) {
-            logger.error("Failed to load ref images", e);
-        }
-    }
+    private void hoverOverBodiesAndExtractData(List<SysmapBody> bodies) throws InterruptedException {
+        MouseUtil mouseUtil = new MouseUtil(this.screenRect.width, this.screenRect.height, CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
+        Random random = new Random();
 
-    private void writeDebugImages(Planar<GrayF32> rgb, GrayF32 gray, GrayU8 binary, String systemName, List<Rectangle> result) {
-        try {
-            if (this.isWriteDebugImageRgbOriginal() || this.isWriteDebugImageRgbResult() || this.isWriteDebugImageGray() || this.isWriteDebugImageThreshold()) {
-                final File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
-                final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
+        SysmapBody leftmostBodyOnScreen = bodies.stream().sorted((b1, b2) -> new Integer(b1.areaInImage.x).compareTo(new Integer(b2.areaInImage.x))).findFirst().orElse(null);
+        leftmostBodyOnScreen.centerOnScreen = mouseUtil.imageToScreen(new Point(leftmostBodyOnScreen.areaInImage.x + leftmostBodyOnScreen.areaInImage.width / 2,
+                leftmostBodyOnScreen.areaInImage.y + leftmostBodyOnScreen.areaInImage.height / 2));
+        SysmapBody rightmostBodyOnScreen = bodies.stream().sorted((b1, b2) -> -1 * new Integer(b1.areaInImage.x).compareTo(new Integer(b2.areaInImage.x))).findFirst()
+                .orElse(null);
+        rightmostBodyOnScreen.centerOnScreen = mouseUtil.imageToScreen(new Point(rightmostBodyOnScreen.areaInImage.x + rightmostBodyOnScreen.areaInImage.width / 2,
+                rightmostBodyOnScreen.areaInImage.y + rightmostBodyOnScreen.areaInImage.height / 2));
 
-                if (this.isWriteDebugImageRgbOriginal() || this.isWriteDebugImageRgbResult()) {
-                    BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
-                    if (this.isWriteDebugImageRgbOriginal()) {
-                        ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_rgb_original " + systemName + ".png"));
+        SysmapBody lastBody = null;
+        for (SysmapBody b : bodies) {
+            logger.debug("Extracting data from body at " + b.areaInImage);
+
+            b.centerOnScreen = mouseUtil.imageToScreen(new Point(b.areaInImage.x + b.areaInImage.width / 2, b.areaInImage.y + b.areaInImage.height / 2));
+
+            final long start = System.currentTimeMillis();
+
+            while ((System.currentTimeMillis() - start) < 2500L) {
+                synchronized (this.screenConverterResult) {
+                    this.robot.mouseMove((b.centerOnScreen.x - 5) + random.nextInt(10), (b.centerOnScreen.y - 5) + random.nextInt(10));
+
+                    this.screenConverterResult.wait();
+
+                    if (this.extractBodyData(this.screenConverterResult.getRgb(), this.screenConverterResult.getHsv(), b)) {
+                        break;
                     }
-                    if (this.isWriteDebugImageRgbResult()) {
-                        Graphics2D g = debugImage.createGraphics();
-                        g.setColor(Color.CYAN);
-                        for (Rectangle bl : result) {
-                            g.drawRect(bl.x, bl.y, bl.width, bl.height);
-                            //g.drawString(String.format(Locale.US, "%.6f", bl.getErrorPerPixel()), bl.getX(), bl.getY());
-                        }
-                        g.dispose();
-                        ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_rgb_result " + systemName + ".png"));
-                    }
-                }
-
-                if (this.isWriteDebugImageGray()) {
-                    BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(gray), null);
-                    ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_gray " + systemName + ".png"));
-                }
-
-                if (this.isWriteDebugImageThreshold()) {
-                    BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
-                    ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_threshold " + systemName + ".png"));
                 }
             }
-        } catch (IOException e) {
-            logger.warn("Failed to write debug image", e);
+
+            if (lastBody == null || b.hasDifferentData(lastBody)) {
+                lastBody = b;
+            } else {
+                this.robot.mouseMove((rightmostBodyOnScreen.centerOnScreen.x - 5) + random.nextInt(10), (rightmostBodyOnScreen.centerOnScreen.y - 5) + random.nextInt(10));
+                Thread.sleep(500);
+                this.robot.mouseMove((leftmostBodyOnScreen.centerOnScreen.x - 5) + random.nextInt(10), (leftmostBodyOnScreen.centerOnScreen.y - 5) + random.nextInt(10));
+                Thread.sleep(500);
+
+                while ((System.currentTimeMillis() - start) < 5000L) {
+                    synchronized (this.screenConverterResult) {
+                        this.robot.mouseMove((b.centerOnScreen.x - 5) + random.nextInt(10), (b.centerOnScreen.y - 5) + random.nextInt(10));
+
+                        this.screenConverterResult.wait();
+
+                        if (this.extractBodyData(this.screenConverterResult.getRgb(), this.screenConverterResult.getHsv(), b)) {
+                            break;
+                        }
+                    }
+                }
+
+                lastBody = b;
+            }
         }
+    }
+
+    public boolean extractBodyData(Planar<GrayF32> rgb, Planar<GrayF32> hsv, SysmapBody b) {
+        b.rgbDebugImage = rgb.clone();
+        b.grayDebugImage = ConvertImage.average(rgb, null);
+        for (int y = 0; y < hsv.height; y++) {
+            for (int x = 0; x < hsv.width; x++) {
+                float v = hsv.bands[2].unsafe_get(x, y);
+                float s = hsv.bands[1].unsafe_get(x, y);
+                if (v < 0.45f || s > 0.2f) {
+                    b.grayDebugImage.unsafe_set(x, y, 0f);
+                }
+            }
+        }
+
+        TemplateMatch mUnexplored = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 420, 0, 1920 - 420, 1080, refUnexplored);
+        if (mUnexplored.getErrorPerPixel() > 0.025f) {
+            return false;
+        } else {
+            TemplateMatch mArrivalPoint = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, mUnexplored.getX() - 20, mUnexplored.getY() + 20, 170, 55,
+                    refArrivalPoint);
+            if (mArrivalPoint.getErrorPerPixel() <= 0.025f) {
+                int apX0 = Math.min(b.grayDebugImage.width - 1, mArrivalPoint.getX() + mArrivalPoint.getWidth());
+                int apY0 = Math.max(0, mArrivalPoint.getY() - 5);
+                int apX1 = Math.min(b.grayDebugImage.width - 1, apX0 + 225);
+                int apY1 = Math.min(b.grayDebugImage.height - 1, apY0 + 30);
+                String arrivalPointText = this.scanText(b.grayDebugImage.subimage(apX0, apY0, apX1, apY1), textTemplates);
+                Pattern p = Pattern.compile(".*?((\\d{1,3})([\\.,]\\d{3})*([\\.,]\\d{2})LS).*?");
+                Matcher m = p.matcher(arrivalPointText);
+                if (m.matches()) {
+                    StringBuilder sb = new StringBuilder(m.group(1).replaceAll("\\D", ""));
+                    sb.insert(sb.length() - 2, ".");
+                    try {
+                        b.distanceLs = new BigDecimal(sb.toString());
+                    } catch (NumberFormatException e) {
+                        logger.error("Failed to parse '" + sb + "' (derived from the original '" + m.group(1) + "') to a BigDecimal");
+                    }
+                }
+            }
+
+            TemplateMatch mEarthMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refEarthMasses);
+            if (mEarthMasses.getErrorPerPixel() <= 0.025f) {
+                int emX0 = Math.min(b.grayDebugImage.width - 1, mEarthMasses.getX() + mEarthMasses.getWidth());
+                int emY0 = Math.max(0, mEarthMasses.getY() - 5);
+                int emX1 = Math.min(b.grayDebugImage.width - 1, emX0 + 250);
+                int emY1 = Math.min(b.grayDebugImage.height - 1, emY0 + 30);
+                String earthMassesText = this.scanText(b.grayDebugImage.subimage(emX0, emY0, emX1, emY1), textTemplates);
+                Pattern p = Pattern.compile(".*?((\\d{1,3})([\\.,]\\d{3})*([\\.,]\\d{3})).*?");
+                Matcher m = p.matcher(earthMassesText);
+                if (m.matches()) {
+                    StringBuilder sb = new StringBuilder(m.group(1).replaceAll("\\D", ""));
+                    sb.insert(sb.length() - 3, ".");
+                    try {
+                        b.earthMasses = new BigDecimal(sb.toString());
+                    } catch (NumberFormatException e) {
+                        logger.error("Failed to parse '" + sb + "' (derived from the original '" + m.group(1) + "') to a BigDecimal");
+                    }
+                }
+
+                TemplateMatch mRadius = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, mEarthMasses.getX() - 2, mEarthMasses.getY() + 20, 170, 40, refRadius);
+                if (mRadius.getErrorPerPixel() <= 0.025f) {
+                    int radX0 = Math.min(b.grayDebugImage.width - 1, mRadius.getX() + mRadius.getWidth());
+                    int radY0 = Math.max(0, mRadius.getY() - 5);
+                    int radX1 = Math.min(b.grayDebugImage.width - 1, radX0 + 300);
+                    int radY1 = Math.min(b.grayDebugImage.height - 1, radY0 + 30);
+                    String radiusText = this.scanText(b.grayDebugImage.subimage(radX0, radY0, radX1, radY1), textTemplates);
+                    p = Pattern.compile(".*?((\\d{1,3})([\\.,]\\d{3})*KM).*?");
+                    m = p.matcher(radiusText);
+                    if (m.matches()) {
+                        StringBuilder sb = new StringBuilder(m.group(1).replaceAll("\\D", ""));
+                        sb.insert(sb.length() - 2, ".");
+                        try {
+                            b.radiusKm = new BigDecimal(sb.toString());
+                        } catch (NumberFormatException e) {
+                            logger.error("Failed to parse '" + sb + "' (derived from the original '" + m.group(1) + "') to a BigDecimal");
+                        }
+                    }
+                }
+            }
+
+            return true;
+        }
+    }
+
+    private String scanText(GrayF32 image, List<Template> textTemplates) {
+        List<TemplateMatch> allMatches = new ArrayList<>();
+        for (Template template : textTemplates) {
+            allMatches.addAll(TemplateMatcher.findAllMatchingLocations(image, template, 0.05f));
+        }
+        allMatches = allMatches.stream().sorted((m1, m2) -> new Float(m1.getErrorPerPixel()).compareTo(new Float(m2.getErrorPerPixel()))).collect(Collectors.toList());
+
+        List<TemplateMatch> remainingMatches = new ArrayList<>();
+        List<Rectangle> rects = new ArrayList<>();
+        for (TemplateMatch m : allMatches.stream().filter(m -> m.getTemplate().getName().matches("\\w+")).collect(Collectors.toList())) {
+            Rectangle r = new Rectangle(m.getX(), m.getY(), m.getWidth(), m.getHeight());
+            if (!intersectsWithAny(r, rects)) {
+                rects.add(r);
+                remainingMatches.add(m);
+            }
+        }
+        for (TemplateMatch m : allMatches.stream().filter(m -> m.getTemplate().getName().matches("\\W+")).collect(Collectors.toList())) {
+            Rectangle r = new Rectangle(m.getX(), m.getY(), m.getWidth(), m.getHeight());
+            if (!intersectsWithAny(r, rects)) {
+                rects.add(r);
+                remainingMatches.add(m);
+            }
+        }
+        remainingMatches = remainingMatches.stream().sorted((m1, m2) -> new Integer(m1.getX()).compareTo(new Integer(m2.getX()))).collect(Collectors.toList());
+
+        StringBuilder sbText = new StringBuilder();
+        for (TemplateMatch m : remainingMatches) {
+            sbText.append(m.getTemplate().getName());
+        }
+        return sbText.toString();
     }
 
     private static boolean intersectsWithAny(Rectangle rect, List<Rectangle> rects) {
@@ -206,6 +369,89 @@ public class SysmapScanner {
             }
         }
         return false;
+    }
+
+    public void reloadTemplates() {
+        // REF IMAGES MUST BE 1080p!!!!
+        File refDir = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref");
+        try {
+            this.refUcLogo = TemplateRgb.fromFile(new File(refDir, "uc_logo.png"));
+            this.refUnexplored = Template.fromFile(new File(refDir, "unexplored.png"));
+            this.refArrivalPoint = Template.fromFile(new File(refDir, "arrival_point.png"));
+            this.refEarthMasses = Template.fromFile(new File(refDir, "earth_masses.png"));
+            this.refRadius = Template.fromFile(new File(refDir, "radius.png"));
+            this.textTemplates = Template.fromFolder(new File(refDir, "sysMapText"));
+            this.refSysMapBodies = TemplateRgb.fromFolder(new File(refDir, "sysMapBodies"));
+        } catch (IOException e) {
+            logger.error("Failed to load ref images", e);
+        }
+    }
+
+    private void writeDebugImages(Planar<GrayF32> rgb, GrayF32 gray, GrayU8 binary, String systemName, List<SysmapBody> bodies) {
+        try {
+            final File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
+            final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
+
+            if (this.isWriteDebugImageRgbOriginal() || this.isWriteDebugImageRgbResult()) {
+                BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
+                if (this.isWriteDebugImageRgbOriginal()) {
+                    ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_rgb_original " + systemName + ".png"));
+                }
+                if (this.isWriteDebugImageRgbResult()) {
+                    Graphics2D g = debugImage.createGraphics();
+                    g.setColor(Color.CYAN);
+                    for (SysmapBody b : bodies) {
+                        g.drawRect(b.areaInImage.x, b.areaInImage.y, b.areaInImage.width, b.areaInImage.height);
+                        g.drawString(String.format(Locale.US, "%.6f", b.bestBodyMatch.getErrorPerPixel()), b.areaInImage.x, b.areaInImage.y);
+                    }
+                    g.dispose();
+                    ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_rgb_result " + systemName + ".png"));
+                }
+            }
+
+            if (this.isWriteDebugImageGray()) {
+                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(gray), null);
+                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_gray " + systemName + ".png"));
+            }
+
+            if (this.isWriteDebugImageThreshold()) {
+                BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
+                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_threshold " + systemName + ".png"));
+            }
+
+            for (SysmapBody b : bodies) {
+                if (this.isWriteDebugImageBodyRgbOriginal() || this.isWriteDebugImageBodyRgbResult()) {
+                    BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(b.rgbDebugImage), null, true);
+                    if (this.isWriteDebugImageBodyRgbOriginal()) {
+                        ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_body" + bodies.indexOf(b) + "_rgb_original " + systemName + ".png"));
+                    }
+                    if (this.isWriteDebugImageBodyRgbResult()) {
+                        Graphics2D g = debugImage.createGraphics();
+                        g.setColor(Color.CYAN);
+                        g.drawString(String.format(Locale.US, "%.6f (%s)", b.bestBodyMatch.getErrorPerPixel(), b.bestBodyMatch.getTemplate().getName()), b.areaInImage.x,
+                                b.areaInImage.y);
+                        if (b.distanceLs != null) {
+                            g.drawString(String.format(Locale.US, "distanceLs=%,.2f", b.distanceLs), b.areaInImage.x, b.areaInImage.y + 15);
+                        }
+                        if (b.earthMasses != null) {
+                            g.drawString(String.format(Locale.US, "earthMasses=%,.3f", b.earthMasses), b.areaInImage.x, b.areaInImage.y + 30);
+                        }
+                        if (b.radiusKm != null) {
+                            g.drawString(String.format(Locale.US, "radiusKm=%,.0f", b.radiusKm), b.areaInImage.x, b.areaInImage.y + 45);
+                        }
+                        g.dispose();
+                        ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_body" + bodies.indexOf(b) + "_rgb_result " + systemName + ".png"));
+                    }
+                }
+
+                if (this.isWriteDebugImageBodyGray()) {
+                    BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(b.grayDebugImage), null);
+                    ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_body" + bodies.indexOf(b) + "_gray " + systemName + ".png"));
+                }
+            }
+        } catch (IOException e) {
+            logger.warn("Failed to write debug image", e);
+        }
     }
 
     public boolean isWriteDebugImageRgbOriginal() {
@@ -238,6 +484,30 @@ public class SysmapScanner {
 
     public void setWriteDebugImageThreshold(boolean writeDebugImageThreshold) {
         this.writeDebugImageThreshold = writeDebugImageThreshold;
+    }
+
+    public boolean isWriteDebugImageBodyRgbOriginal() {
+        return writeDebugImageBodyRgbOriginal;
+    }
+
+    public void setWriteDebugImageBodyRgbOriginal(boolean writeDebugImageBodyRgbOriginal) {
+        this.writeDebugImageBodyRgbOriginal = writeDebugImageBodyRgbOriginal;
+    }
+
+    public boolean isWriteDebugImageBodyRgbResult() {
+        return writeDebugImageBodyRgbResult;
+    }
+
+    public void setWriteDebugImageBodyRgbResult(boolean writeDebugImageBodyRgbResult) {
+        this.writeDebugImageBodyRgbResult = writeDebugImageBodyRgbResult;
+    }
+
+    public boolean isWriteDebugImageBodyGray() {
+        return writeDebugImageBodyGray;
+    }
+
+    public void setWriteDebugImageBodyGray(boolean writeDebugImageBodyGray) {
+        this.writeDebugImageBodyGray = writeDebugImageBodyGray;
     }
 
 }

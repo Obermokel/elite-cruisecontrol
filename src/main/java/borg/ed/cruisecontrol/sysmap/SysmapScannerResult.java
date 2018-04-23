@@ -1,24 +1,22 @@
 package borg.ed.cruisecontrol.sysmap;
 
-import java.util.LinkedHashMap;
-
-import borg.ed.cruisecontrol.ScreenCoord;
-import borg.ed.cruisecontrol.templatematching.TemplateMatchRgb;
+import java.util.ArrayList;
+import java.util.List;
 
 public class SysmapScannerResult {
 
-	private LinkedHashMap<TemplateMatchRgb, ScreenCoord> systemMapScreenCoords = new LinkedHashMap<>();
+    private List<SysmapBody> bodies = new ArrayList<>();
 
-	public SysmapScannerResult(LinkedHashMap<TemplateMatchRgb, ScreenCoord> systemMapScreenCoords) {
-		this.setSystemMapScreenCoords(systemMapScreenCoords);
-	}
+    public SysmapScannerResult(List<SysmapBody> bodies) {
+        this.setBodies(bodies);
+    }
 
-	public LinkedHashMap<TemplateMatchRgb, ScreenCoord> getSystemMapScreenCoords() {
-		return systemMapScreenCoords;
-	}
+    public List<SysmapBody> getBodies() {
+        return bodies;
+    }
 
-	public void setSystemMapScreenCoords(LinkedHashMap<TemplateMatchRgb, ScreenCoord> systemMapScreenCoords) {
-		this.systemMapScreenCoords = systemMapScreenCoords;
-	}
+    public void setBodies(List<SysmapBody> bodies) {
+        this.bodies = bodies;
+    }
 
 }

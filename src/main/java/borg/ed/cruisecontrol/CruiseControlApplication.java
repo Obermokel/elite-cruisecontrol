@@ -21,40 +21,41 @@ import borg.ed.universe.service.UniverseService;
 @Import(UniverseApplication.class)
 public class CruiseControlApplication {
 
-	private static final ApplicationContext APPCTX = new AnnotationConfigApplicationContext(CruiseControlApplication.class);
+    private static final ApplicationContext APPCTX = new AnnotationConfigApplicationContext(CruiseControlApplication.class);
 
-	public static final int SCALED_WIDTH = 1920;
-	public static final int SCALED_HEIGHT = 1080;
-	public static final float MAX_FUEL = 32f;
-	public static final boolean JONK_MODE = true;
-	public static final boolean WRITE_SYSMAP_DEBUG_RGB_ORIGINAL = true;
-	public static final boolean WRITE_SYSMAP_DEBUG_RGB_RESULT = false;
-	public static final boolean WRITE_SYSMAP_DEBUG_GRAY = false;
+    public static final int SCALED_WIDTH = 1920;
+    public static final int SCALED_HEIGHT = 1080;
+    public static final float MAX_FUEL = 32f;
+    public static final boolean JONK_MODE = false;
+    public static final boolean WRITE_SYSMAP_DEBUG_RGB_ORIGINAL = true;
+    public static final boolean WRITE_SYSMAP_DEBUG_RGB_RESULT = true;
+    public static final boolean WRITE_SYSMAP_DEBUG_BODY_RGB_ORIGINAL = true;
+    public static final boolean WRITE_SYSMAP_DEBUG_BODY_RGB_RESULT = true;
 
-	public static void main(String[] args) throws AWTException {
-		GraphicsDevice primaryScreen = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
-		Rectangle screenRect = new Rectangle(primaryScreen.getDisplayMode().getWidth(), primaryScreen.getDisplayMode().getHeight());
-		Robot robot = new Robot(primaryScreen);
+    public static void main(String[] args) throws AWTException {
+        GraphicsDevice primaryScreen = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+        Rectangle screenRect = new Rectangle(primaryScreen.getDisplayMode().getWidth(), primaryScreen.getDisplayMode().getHeight());
+        Robot robot = new Robot(primaryScreen);
 
-		UniverseService universeService = APPCTX.getBean(UniverseService.class);
+        UniverseService universeService = APPCTX.getBean(UniverseService.class);
 
-		CruiseControlThread cruiseControlThread = new CruiseControlThread(robot, screenRect, universeService);
-		cruiseControlThread.start();
+        CruiseControlThread cruiseControlThread = new CruiseControlThread(robot, screenRect, universeService);
+        cruiseControlThread.start();
 
-		CruiseControlFrame cruiseControlFrame = new CruiseControlFrame();
-		cruiseControlFrame.setVisible(true);
+        CruiseControlFrame cruiseControlFrame = new CruiseControlFrame();
+        cruiseControlFrame.setVisible(true);
 
-		cruiseControlThread.addDebugImageListener(cruiseControlFrame);
+        cruiseControlThread.addDebugImageListener(cruiseControlFrame);
 
-		JournalReaderThread journalReaderThread = APPCTX.getBean(JournalReaderThread.class);
-		journalReaderThread.addListener(cruiseControlThread);
-		journalReaderThread.addListener(cruiseControlFrame);
-		journalReaderThread.start();
+        JournalReaderThread journalReaderThread = APPCTX.getBean(JournalReaderThread.class);
+        journalReaderThread.addListener(cruiseControlThread);
+        journalReaderThread.addListener(cruiseControlFrame);
+        journalReaderThread.start();
 
-		StatusReaderThread statusReaderThread = APPCTX.getBean(StatusReaderThread.class);
-		statusReaderThread.addListener(cruiseControlThread);
-		statusReaderThread.addListener(cruiseControlFrame);
-		statusReaderThread.start();
-	}
+        StatusReaderThread statusReaderThread = APPCTX.getBean(StatusReaderThread.class);
+        statusReaderThread.addListener(cruiseControlThread);
+        statusReaderThread.addListener(cruiseControlFrame);
+        statusReaderThread.start();
+    }
 
 }
