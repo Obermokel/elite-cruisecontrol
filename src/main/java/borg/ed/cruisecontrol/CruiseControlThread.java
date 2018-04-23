@@ -47,6 +47,7 @@ import borg.ed.universe.journal.events.AbstractJournalEvent;
 import borg.ed.universe.journal.events.DiscoveryScanEvent;
 import borg.ed.universe.journal.events.FSDJumpEvent;
 import borg.ed.universe.journal.events.FuelScoopEvent;
+import borg.ed.universe.journal.events.MusicEvent;
 import borg.ed.universe.journal.events.ScanEvent;
 import borg.ed.universe.journal.events.StartJumpEvent;
 import borg.ed.universe.model.Body;
@@ -970,7 +971,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
     @Override
     public void onNewJournalEntry(AbstractJournalEvent event) {
-        if (event instanceof StartJumpEvent) {
+        if (event instanceof MusicEvent) {
+            if (MusicEvent.TRACK_DESTINATION_FROM_HYPERSPACE.equals(((MusicEvent) event).getMusicTrack())) {
+                this.doEmergencyExit("End of plotted route");
+            }
+        } else if (event instanceof StartJumpEvent) {
             this.shipControl.stopTurning();
             this.inHyperspaceSince = System.currentTimeMillis();
             this.currentSystemName = ((StartJumpEvent) event).getStarSystem();
