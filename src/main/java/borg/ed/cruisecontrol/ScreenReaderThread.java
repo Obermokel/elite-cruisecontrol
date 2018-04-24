@@ -11,38 +11,40 @@ import borg.ed.cruisecontrol.util.ImageUtil;
 
 public class ScreenReaderThread extends Thread {
 
-	static final Logger logger = LoggerFactory.getLogger(ScreenReaderThread.class);
+    static final Logger logger = LoggerFactory.getLogger(ScreenReaderThread.class);
 
-	private final Robot robot;
-	private final Rectangle screenRect;
-	private final ScreenReaderResult screenReaderResult;
+    public volatile boolean shutdown = false;
 
-	public ScreenReaderThread(Robot robot, Rectangle screenRect, ScreenReaderResult screenReaderResult) {
-		this.setName("SRThread");
-		this.setDaemon(true);
+    private final Robot robot;
+    private final Rectangle screenRect;
+    private final ScreenReaderResult screenReaderResult;
 
-		this.robot = robot;
-		this.screenRect = screenRect;
-		this.screenReaderResult = screenReaderResult;
-	}
+    public ScreenReaderThread(Robot robot, Rectangle screenRect, ScreenReaderResult screenReaderResult) {
+        this.setName("SRThread");
+        this.setDaemon(true);
 
-	@Override
-	public void run() {
-		logger.info(this.getName() + " started");
+        this.robot = robot;
+        this.screenRect = screenRect;
+        this.screenReaderResult = screenReaderResult;
+    }
 
-		while (!Thread.currentThread().isInterrupted()) {
-			// Take the next screen capture and resize it
-			BufferedImage screenCapture = this.robot.createScreenCapture(this.screenRect);
-			BufferedImage scaledScreenCapture = ImageUtil.scaleAndCrop(screenCapture, CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
+    @Override
+    public void run() {
+        logger.info(this.getName() + " started");
 
-			// Notify waiting threads
-			synchronized (this.screenReaderResult) {
-				this.screenReaderResult.setScaledScreenCapture(scaledScreenCapture);
-				this.screenReaderResult.notifyAll();
-			}
-		}
+        while (!Thread.currentThread().isInterrupted() && !this.shutdown) {
+            // Take the next screen capture and resize it
+            BufferedImage screenCapture = this.robot.createScreenCapture(this.screenRect);
+            BufferedImage scaledScreenCapture = ImageUtil.scaleAndCrop(screenCapture, CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
 
-		logger.info(this.getName() + " stopped");
-	}
+            // Notify waiting threads
+            synchronized (this.screenReaderResult) {
+                this.screenReaderResult.setScaledScreenCapture(scaledScreenCapture);
+                this.screenReaderResult.notifyAll();
+            }
+        }
+
+        logger.info(this.getName() + " stopped");
+    }
 
 }

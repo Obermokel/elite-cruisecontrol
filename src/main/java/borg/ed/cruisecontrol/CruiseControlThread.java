@@ -520,9 +520,14 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 Thread[] tarray = new Thread[Thread.activeCount() + 100];
                 Thread.enumerate(tarray);
                 for (Thread t : tarray) {
-                    if (t instanceof JournalReaderThread || t instanceof StatusReaderThread || t instanceof ScreenConverterThread || t instanceof ScreenReaderThread) {
-                        logger.warn("Interrupting " + t);
-                        t.interrupt();
+                    if (t instanceof JournalReaderThread) {
+                        ((JournalReaderThread) t).shutdown = true;
+                    } else if (t instanceof StatusReaderThread) {
+                        ((JournalReaderThread) t).shutdown = true;
+                    } else if (t instanceof ScreenConverterThread) {
+                        ((JournalReaderThread) t).shutdown = true;
+                    } else if (t instanceof ScreenReaderThread) {
+                        ((JournalReaderThread) t).shutdown = true;
                     }
                 }
 
