@@ -44,7 +44,7 @@ public class SysMapTest {
 			BufferedImage bi = ImageIO.read(testFile);
 			for (int y = 0; y < bi.getHeight(); y++) {
 				for (int x = 0; x < bi.getWidth(); x++) {
-					if (bi.getRGB(x, y) == Color.CYAN.getRGB()) {
+					if (bi.getRGB(x, y) == Color.GREEN.getRGB()) {
 						bi.setRGB(x, y, Color.BLACK.getRGB());
 					}
 				}

@@ -108,7 +108,7 @@ public class DistMasses {
                         String radiusText = scanText(gray.subimage(radX0, radY0, radX1, radY1), textTemplates);
 
                         Graphics2D g = bi.createGraphics();
-                        g.setColor(Color.CYAN);
+                        g.setColor(Color.GREEN);
                         g.drawString(arrivalPointText, mArrivalPoint.getX(), mArrivalPoint.getY());
                         g.drawString(earthMassesText, mEarthMasses.getX(), mEarthMasses.getY());
                         g.drawString(radiusText, mRadius.getX(), mRadius.getY());
