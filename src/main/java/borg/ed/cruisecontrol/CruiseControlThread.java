@@ -19,6 +19,7 @@ import java.util.ListIterator;
 import java.util.Locale;
 import java.util.Random;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -157,13 +158,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 lastTick = System.currentTimeMillis();
 
                 // >>>> SCREEN CAPTURE >>>>
-                //				HWND hwnd = User32.INSTANCE.FindWindow(null, "Elite - Dangerous (CLIENT)");
-                //				BufferedImage screenCapture = GDI32Util.getScreenshot(hwnd);
-                //				BufferedImage screenCapture = robot.createScreenCapture(this.screenRect);
-                //				BufferedImage scaledScreenCapture = ImageUtil.scaleAndCrop(screenCapture, rgb.width, rgb.height);
-                //				ConvertBufferedImage.convertFrom(scaledScreenCapture, true, rgb);
-                //				ColorHsv.rgbToHsv_F32(rgb, hsv);
-                //				this.hsvToHudImages(hsv, orangeHudImage, blueWhiteHudImage, redHudImage);
                 synchronized (screenConverterResult) {
                     try {
                         screenConverterResult.wait();
@@ -174,78 +168,22 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                         redHudImage = screenConverterResult.getRedHudImage().clone();
                         brightImage = screenConverterResult.getBrightImage().clone();
                     } catch (InterruptedException e) {
-                        logger.warn("Interrupted while waiting for screen converter result, exiting main loop", e);
+                        this.doEmergencyExit("Interrupted while waiting for screen converter result, exiting main loop");
                         break;
                     }
                 }
                 // <<<< SCREEN CAPTURE <<<<
 
+                // >>>> PROCESSING THE DATA >>>>
                 brightnessAhead = this.computeBrightnessAhead(brightImage);
-                compassMatch = null;
-                targetMatch = null;
-                if (gameState == GameState.UNKNOWN || gameState == GameState.ALIGN_TO_NEXT_SYSTEM || gameState == GameState.FSD_CHARGING || gameState == GameState.ALIGN_TO_NEXT_BODY
-                        || gameState == GameState.APPROACH_NEXT_BODY) {
-                    final GrayF32 myOrangeHudImage = orangeHudImage.clone(); // TODO Why is this cloned?
-                    Future<TemplateMatch> futureTarget = threadPool.submit(new Callable<TemplateMatch>() {
-                        @Override
-                        public TemplateMatch call() throws Exception {
-                            return locateTargetSmart(myOrangeHudImage);
-                        }
-                    });
-                    Future<TemplateMatch> futureCompass = threadPool.submit(new Callable<TemplateMatch>() {
-                        @Override
-                        public TemplateMatch call() throws Exception {
-                            return locateCompassSmart(myOrangeHudImage);
-                        }
-                    });
-                    targetMatch = futureTarget.get();
-                    compassMatch = futureCompass.get();
-                } else {
-                    compassMatch = null;
-                    targetMatch = null;
-                }
-
-                TemplateMatch compassDotMatch = null;
-                boolean hollow = false;
-                if (compassMatch != null) {
-                    int xOffset = compassMatch.getX() - 16;
-                    int yOffset = compassMatch.getY() - 16;
-                    int regionWidth = compassMatch.getWidth() + 32;
-                    int regionHeight = compassMatch.getHeight() + 32;
-                    //GrayF32 grayCompass = blueWhiteHudImage.subimage(xOffset, yOffset, xOffset + regionWidth, yOffset + regionHeight);
-                    TemplateMatch compassDotFilledMatch = TemplateMatcher.findBestMatchingLocationInRegion(blueWhiteHudImage, xOffset, yOffset, regionWidth, regionHeight,
-                            this.refCompassDotFilled);
-                    if (compassDotFilledMatch.getErrorPerPixel() >= 0.05f) {
-                        compassDotFilledMatch = null;
-                    }
-                    TemplateMatch compassDotHollowMatch = TemplateMatcher.findBestMatchingLocationInRegion(blueWhiteHudImage, xOffset, yOffset, regionWidth, regionHeight,
-                            this.refCompassDotHollow);
-                    if (compassDotHollowMatch.getErrorPerPixel() >= 0.05f) {
-                        compassDotHollowMatch = null;
-                    }
-                    if (compassDotFilledMatch == null && compassDotHollowMatch == null) {
-                        // Not found
-                    } else if ((compassDotFilledMatch != null && compassDotHollowMatch == null)
-                            || (compassDotFilledMatch != null && compassDotHollowMatch != null && compassDotFilledMatch.getErrorPerPixel() <= compassDotHollowMatch.getErrorPerPixel())) {
-                        hollow = false;
-                        compassDotMatch = compassDotFilledMatch;
-                    } else if ((compassDotFilledMatch == null && compassDotHollowMatch != null)
-                            || (compassDotFilledMatch != null && compassDotHollowMatch != null && compassDotFilledMatch.getErrorPerPixel() >= compassDotHollowMatch.getErrorPerPixel())) {
-                        hollow = true;
-                        compassDotMatch = compassDotHollowMatch;
-                    }
-                }
-
+                TemplateMatch compassDotMatch = this.searchForCompassAndTarget(orangeHudImage, blueWhiteHudImage, threadPool);
                 this.searchForSixSecondsOrScanning(orangeHudImage, brightImage);
-
-                this.handleGameState(rgb, hsv, orangeHudImage, compassDotMatch, hollow);
+                this.handleGameState(rgb, hsv, orangeHudImage, compassDotMatch);
+                // <<<< PROCESSING THE DATA <<<<
 
                 // >>>> DEBUG IMAGE >>>>
-                //ConvertBufferedImage.convertTo(orangeHudImage, debugImage);
-
                 this.drawColoredDebugImage(debugImage, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
-                this.drawDebugInfoOnImage(debugImage, compassDotMatch, hollow);
-
+                this.drawDebugInfoOnImage(debugImage, compassDotMatch);
                 for (DebugImageListener listener : this.debugImageListeners) {
                     listener.onNewDebugImage(debugImage, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
                 }
@@ -257,6 +195,62 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         }
 
         logger.info(this.getName() + " stopped");
+    }
+
+    private TemplateMatch searchForCompassAndTarget(GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, final ExecutorService threadPool)
+            throws InterruptedException, ExecutionException {
+        compassMatch = null;
+        targetMatch = null;
+        if (gameState == GameState.UNKNOWN || gameState == GameState.ALIGN_TO_NEXT_SYSTEM || gameState == GameState.FSD_CHARGING || gameState == GameState.ALIGN_TO_NEXT_BODY
+                || gameState == GameState.APPROACH_NEXT_BODY) {
+            final GrayF32 myOrangeHudImage = orangeHudImage.clone(); // TODO Why is this cloned?
+            Future<TemplateMatch> futureTarget = threadPool.submit(new Callable<TemplateMatch>() {
+                @Override
+                public TemplateMatch call() throws Exception {
+                    return locateTargetSmart(myOrangeHudImage);
+                }
+            });
+            Future<TemplateMatch> futureCompass = threadPool.submit(new Callable<TemplateMatch>() {
+                @Override
+                public TemplateMatch call() throws Exception {
+                    return locateCompassSmart(myOrangeHudImage);
+                }
+            });
+            targetMatch = futureTarget.get();
+            compassMatch = futureCompass.get();
+        } else {
+            compassMatch = null;
+            targetMatch = null;
+        }
+
+        TemplateMatch compassDotMatch = null;
+        if (compassMatch != null) {
+            int xOffset = compassMatch.getX() - 16;
+            int yOffset = compassMatch.getY() - 16;
+            int regionWidth = compassMatch.getWidth() + 32;
+            int regionHeight = compassMatch.getHeight() + 32;
+            //GrayF32 grayCompass = blueWhiteHudImage.subimage(xOffset, yOffset, xOffset + regionWidth, yOffset + regionHeight);
+            TemplateMatch compassDotFilledMatch = TemplateMatcher.findBestMatchingLocationInRegion(blueWhiteHudImage, xOffset, yOffset, regionWidth, regionHeight,
+                    this.refCompassDotFilled);
+            if (compassDotFilledMatch.getErrorPerPixel() >= 0.05f) {
+                compassDotFilledMatch = null;
+            }
+            TemplateMatch compassDotHollowMatch = TemplateMatcher.findBestMatchingLocationInRegion(blueWhiteHudImage, xOffset, yOffset, regionWidth, regionHeight,
+                    this.refCompassDotHollow);
+            if (compassDotHollowMatch.getErrorPerPixel() >= 0.05f) {
+                compassDotHollowMatch = null;
+            }
+            if (compassDotFilledMatch == null && compassDotHollowMatch == null) {
+                // Not found
+            } else if ((compassDotFilledMatch != null && compassDotHollowMatch == null)
+                    || (compassDotFilledMatch != null && compassDotHollowMatch != null && compassDotFilledMatch.getErrorPerPixel() <= compassDotHollowMatch.getErrorPerPixel())) {
+                compassDotMatch = compassDotFilledMatch;
+            } else if ((compassDotFilledMatch == null && compassDotHollowMatch != null)
+                    || (compassDotFilledMatch != null && compassDotHollowMatch != null && compassDotFilledMatch.getErrorPerPixel() >= compassDotHollowMatch.getErrorPerPixel())) {
+                compassDotMatch = compassDotHollowMatch;
+            }
+        }
+        return compassDotMatch;
     }
 
     private void searchForSixSecondsOrScanning(GrayF32 orangeHudImage, GrayF32 brightImage) {
@@ -282,7 +276,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         }
     }
 
-    private void handleGameState(Planar<GrayF32> rgb, Planar<GrayF32> hsv, GrayF32 orangeHudImage, TemplateMatch compassDotMatch, boolean hollow) throws InterruptedException {
+    private void handleGameState(Planar<GrayF32> rgb, Planar<GrayF32> hsv, GrayF32 orangeHudImage, TemplateMatch compassDotMatch) throws InterruptedException {
         switch (this.gameState) {
             case UNKNOWN:
                 this.shipControl.releaseAllKeys();
@@ -303,7 +297,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 if (targetMatch != null) {
                     this.alignToTargetInHud(targetMatch);
                 } else {
-                    this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow);
+                    this.alignToTargetInCompass(compassMatch, compassDotMatch);
                 }
                 break;
             case IN_HYPERSPACE:
@@ -428,7 +422,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                         if (this.shipControl.getThrottle() != 0) {
                             this.shipControl.setThrottle(0);
                         }
-                        if (this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow)) {
+                        if (this.alignToTargetInCompass(compassMatch, compassDotMatch)) {
                             this.shipControl.setThrottle(75);
                             this.gameState = GameState.APPROACH_NEXT_BODY;
                             logger.debug("Next body in sight, accelerating to 75% and waiting for detailed surface scan");
@@ -467,7 +461,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                     if (targetMatch != null) {
                         this.alignToTargetInHud(targetMatch);
                     } else {
-                        this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow);
+                        this.alignToTargetInCompass(compassMatch, compassDotMatch);
                     }
                 }
                 break;
@@ -498,7 +492,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                         logger.debug("Next system in sight, charging FSD");
                     }
                 } else {
-                    if (this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow)) {
+                    if (this.alignToTargetInCompass(compassMatch, compassDotMatch)) {
                         this.shipControl.toggleFsd();
                         this.gameState = GameState.FSD_CHARGING;
                         logger.debug("Next system in sight, charging FSD");
@@ -520,61 +514,63 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
     private void doEmergencyExit(String reason) {
         synchronized (inEmergencyExit) {
-            inEmergencyExit = Boolean.TRUE;
+            if (Boolean.FALSE.equals(inEmergencyExit)) {
+                inEmergencyExit = Boolean.TRUE;
 
-            try {
-                logger.error("Emergency exit! Reason: " + reason);
-                this.gameState = GameState.IN_EMERGENCY_EXIT;
+                try {
+                    logger.error("Emergency exit! Reason: " + reason);
+                    this.gameState = GameState.IN_EMERGENCY_EXIT;
 
-                // Terminate all event-generating threads
-                Thread[] tarray = new Thread[Thread.activeCount() + 100];
-                Thread.enumerate(tarray);
-                for (Thread t : tarray) {
-                    if (t instanceof JournalReaderThread) {
-                        ((JournalReaderThread) t).shutdown = true;
-                    } else if (t instanceof StatusReaderThread) {
-                        ((JournalReaderThread) t).shutdown = true;
-                    } else if (t instanceof ScreenConverterThread) {
-                        ((JournalReaderThread) t).shutdown = true;
-                    } else if (t instanceof ScreenReaderThread) {
-                        ((JournalReaderThread) t).shutdown = true;
+                    // Terminate all event-generating threads
+                    Thread[] tarray = new Thread[Thread.activeCount() + 100];
+                    Thread.enumerate(tarray);
+                    for (Thread t : tarray) {
+                        if (t instanceof JournalReaderThread) {
+                            ((JournalReaderThread) t).shutdown = true;
+                        } else if (t instanceof StatusReaderThread) {
+                            ((JournalReaderThread) t).shutdown = true;
+                        } else if (t instanceof ScreenConverterThread) {
+                            ((JournalReaderThread) t).shutdown = true;
+                        } else if (t instanceof ScreenReaderThread) {
+                            ((JournalReaderThread) t).shutdown = true;
+                        }
                     }
+
+                    // Give them some time to terminate
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        logger.warn("Interrupted while waiting after stopping threads");
+                    }
+
+                    // Full stop, then exit
+                    this.shipControl.fullStop();
+                    this.shipControl.exitToMainMenu();
+
+                    // Wait until we are at the main menu
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException e) {
+                        logger.warn("Interrupted while waiting after exit to main menu");
+                    }
+
+                    // We want to see what has happened
+                    this.shipControl.saveShadowplay();
+
+                    // Give the video some time to save
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException e) {
+                        logger.warn("Interrupted while waiting after shadowplay capture");
+                    }
+
+                    // Let's hope it worked
+                    System.exit(-1);
+                } catch (Exception e) {
+                    logger.error("Exception while in emergency exit", e);
+                    this.shipControl.saveShadowplay();
+                    System.exit(-1);
                 }
-
-                // Give them some time to terminate
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    logger.warn("Interrupted while waiting after stopping threads");
-                }
-
-                // Full stop, then exit
-                this.shipControl.fullStop();
-                this.shipControl.exitToMainMenu();
-
-                // Wait until we are at the main menu
-                try {
-                    Thread.sleep(5000);
-                } catch (InterruptedException e) {
-                    logger.warn("Interrupted while waiting after exit to main menu");
-                }
-
-                // We want to see what has happened
-                this.shipControl.saveShadowplay();
-
-                // Give the video some time to save
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    logger.warn("Interrupted while waiting after shadowplay capture");
-                }
-
-                // Let's hope it worked
-                System.exit(-1);
-            } catch (Exception e) {
-                logger.error("Exception while in emergency exit", e);
-                this.shipControl.saveShadowplay();
-                System.exit(-1);
             }
         }
     }
@@ -687,10 +683,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         return false;
     }
 
-    private boolean alignToTargetInCompass(TemplateMatch compassMatch, TemplateMatch compassDotMatch, boolean hollow) {
+    private boolean alignToTargetInCompass(TemplateMatch compassMatch, TemplateMatch compassDotMatch) {
         if (compassMatch == null || compassDotMatch == null) {
             this.shipControl.stopTurning();
         } else {
+            boolean hollow = compassDotMatch.getTemplate().getName().contains("hollow");
             int width = compassMatch.getWidth();
             int height = compassMatch.getHeight();
             int x = (compassDotMatch.getX() - compassMatch.getX()) + (compassDotMatch.getWidth() / 2);
@@ -751,10 +748,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         return false;
     }
 
-    private boolean alignToEscapeInCompass(TemplateMatch compassMatch, TemplateMatch compassDotMatch, boolean hollow) {
+    private boolean alignToEscapeInCompass(TemplateMatch compassMatch, TemplateMatch compassDotMatch) {
         if (compassMatch == null || compassDotMatch == null) {
             this.shipControl.stopTurning();
         } else {
+            boolean hollow = compassDotMatch.getTemplate().getName().contains("hollow");
             int width = compassMatch.getWidth();
             int height = compassMatch.getHeight();
             int x = (compassDotMatch.getX() - compassMatch.getX()) + (compassDotMatch.getWidth() / 2);
@@ -840,7 +838,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         }
     }
 
-    private void drawDebugInfoOnImage(BufferedImage debugImage, TemplateMatch compassDotMatch, boolean hollow) {
+    private void drawDebugInfoOnImage(BufferedImage debugImage, TemplateMatch compassDotMatch) {
         Graphics2D g = debugImage.createGraphics();
 
         g.setColor(new Color(0, 0, 127));
@@ -851,7 +849,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             g.drawRect(compassMatch.getX(), compassMatch.getY(), compassMatch.getWidth(), compassMatch.getHeight());
             g.drawString(String.format(Locale.US, "%.4f", compassMatch.getErrorPerPixel()), compassMatch.getX(), compassMatch.getY());
             if (compassDotMatch != null) {
-                g.setColor(hollow ? Color.RED : Color.GREEN);
+                g.setColor(compassDotMatch.getTemplate().getName().contains("hollow") ? Color.RED : Color.GREEN);
                 g.drawRect(compassDotMatch.getX(), compassDotMatch.getY(), compassDotMatch.getWidth(), compassDotMatch.getHeight());
                 g.drawString(String.format(Locale.US, "%.4f", compassDotMatch.getErrorPerPixel()), compassDotMatch.getX(), compassDotMatch.getY());
             }

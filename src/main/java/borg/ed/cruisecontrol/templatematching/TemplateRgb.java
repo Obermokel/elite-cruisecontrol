@@ -35,15 +35,18 @@ public class TemplateRgb {
     }
 
     public static TemplateRgb fromFile(File file) throws IOException {
+        return TemplateRgb.fromFile(file, file.getName());
+    }
+
+    public static TemplateRgb fromFile(File file, String name) throws IOException {
         Planar<GrayF32> pixels = ImageUtil.normalize255(ConvertBufferedImage.convertFromMulti(ImageIO.read(file), (Planar<GrayF32>) null, true, GrayF32.class));
-        String name = file.getParentFile().getName().replace("_dot", ".").replace("_comma", ",");
         GrayF32 mask = null;
         File maskFile = new File(file.getParentFile(), file.getName().replace(".png", "_mask.png"));
         if (maskFile.exists()) {
             mask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(maskFile), (GrayF32) null));
         }
 
-        return new TemplateRgb(file, pixels, mask, name);
+        return new TemplateRgb(file, pixels, mask, name.replace("_dot", ".").replace("_comma", ","));
     }
 
     public static List<TemplateRgb> fromFolder(File setDir) throws IOException {
@@ -62,7 +65,7 @@ public class TemplateRgb {
                 }
             });
             for (File file : files) {
-                result.add(TemplateRgb.fromFile(file));
+                result.add(TemplateRgb.fromFile(file, setDir.getName()));
             }
         }
         return result;

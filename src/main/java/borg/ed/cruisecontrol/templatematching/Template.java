@@ -34,15 +34,18 @@ public class Template {
     }
 
     public static Template fromFile(File file) throws IOException {
+        return Template.fromFile(file, file.getName());
+    }
+
+    public static Template fromFile(File file, String name) throws IOException {
         GrayF32 pixels = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(file), (GrayF32) null));
-        String name = file.getParentFile().getName().replace("_dot", ".").replace("_comma", ",");
         GrayF32 mask = null;
         File maskFile = new File(file.getParentFile(), file.getName().replace(".png", "_mask.png"));
         if (maskFile.exists()) {
             mask = ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(maskFile), (GrayF32) null));
         }
 
-        return new Template(file, pixels, mask, name);
+        return new Template(file, pixels, mask, name.replace("_dot", ".").replace("_comma", ","));
     }
 
     public static List<Template> fromFolder(File setDir) throws IOException {
@@ -61,7 +64,7 @@ public class Template {
                 }
             });
             for (File file : files) {
-                result.add(Template.fromFile(file));
+                result.add(Template.fromFile(file, setDir.getName()));
             }
         }
         return result;
