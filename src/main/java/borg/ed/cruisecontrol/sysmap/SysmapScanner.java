@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Locale;
 import java.util.Random;
 import java.util.regex.Matcher;
@@ -106,8 +107,8 @@ public class SysmapScanner {
             ImageMiscOps.fillRectangle(gray, 0f, 0, 0, 420, 1080);
 
             // Remove red-orange coronas
-            for (int y = 0; y < rgb.height; y++) {
-                for (int x = 420; x < rgb.width; x++) {
+            for (int y = 0; y < hsv.height; y++) {
+                for (int x = 420; x < hsv.width; x++) {
                     float s = hsv.bands[1].unsafe_get(x, y);
                     if (s >= 0.75f) {
                         float h = hsv.bands[0].unsafe_get(x, y);
@@ -153,7 +154,7 @@ public class SysmapScanner {
                     rects.add(new Rectangle(xMin, yMin, width, height));
                 }
             }
-            logger.debug("Candidate locations found: " + rects.size());
+            logger.debug("Contours of reasonable size: " + rects.size());
 
             List<SysmapBody> bodies = new ArrayList<>();
             for (Rectangle rect : rects) {
@@ -162,7 +163,7 @@ public class SysmapScanner {
                     bodies.add(b);
                 }
             }
-            logger.debug("Removed intersections, " + bodies.size() + " location(s) remaining");
+            logger.debug("Non-intersecting contours: " + bodies.size());
 
             // If we have control over the computer move the mouse over the found locations to get distance information
             if (!bodies.isEmpty() && this.robot != null && this.screenRect != null && this.screenConverterResult != null) {
@@ -174,15 +175,23 @@ public class SysmapScanner {
             }
 
             // Try to identify the body types
-            for (SysmapBody b : bodies) {
-                Planar<GrayF32> bodyImage = rgb.subimage(b.areaInImage.x, b.areaInImage.y, b.areaInImage.x + b.areaInImage.width, b.areaInImage.y + b.areaInImage.height);
-                TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(bodyImage, this.refSysMapBodies);
-                b.bestBodyMatch = bestMatch;
+            ListIterator<SysmapBody> it = bodies.listIterator();
+            while (it.hasNext()) {
+                SysmapBody b = it.next();
+                if (!b.unexplored) {
+                    logger.debug("Removing already explored or invalid body: " + b);
+                    it.remove();
+                } else {
+                    logger.debug("Guessing body type of " + b);
+                    Planar<GrayF32> bodyImage = rgb.subimage(b.areaInImage.x, b.areaInImage.y, b.areaInImage.x + b.areaInImage.width, b.areaInImage.y + b.areaInImage.height);
+                    TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(bodyImage, this.refSysMapBodies);
+                    b.bestBodyMatch = bestMatch;
+                }
             }
-            logger.debug("Guessed body types");
 
             // Sort
             Collections.sort(bodies, new SensibleScanOrderComparator());
+            logger.debug("Sorted bodies for efficient scan order");
 
             // Finished
             logger.info(String.format(Locale.US, "System map scan took %,d ms, found %d bodies", System.currentTimeMillis() - scanStart, bodies.size()));
@@ -205,7 +214,7 @@ public class SysmapScanner {
 
         SysmapBody lastBody = null;
         for (SysmapBody b : bodies) {
-            logger.debug("Extracting data from body at " + b.areaInImage);
+            logger.debug("Extracting data for " + b);
 
             b.centerOnScreen = mouseUtil.imageToScreen(new Point(b.areaInImage.x + b.areaInImage.width / 2, b.areaInImage.y + b.areaInImage.height / 2));
 
@@ -217,7 +226,7 @@ public class SysmapScanner {
 
                     this.screenConverterResult.wait();
 
-                    if (this.extractBodyData(this.screenConverterResult.getRgb(), this.screenConverterResult.getHsv(), b)) {
+                    if (this.extractBodyData(this.screenConverterResult.getRgb().clone(), this.screenConverterResult.getHsv().clone(), b)) {
                         break;
                     }
                 }
@@ -226,10 +235,12 @@ public class SysmapScanner {
             if (lastBody == null || b.hasDifferentData(lastBody)) {
                 lastBody = b;
             } else {
+                logger.debug("No body data found, or same data as last body -> hovering of rightmost and leftmost body");
                 this.robot.mouseMove((rightmostBodyOnScreen.centerOnScreen.x - 5) + random.nextInt(10), (rightmostBodyOnScreen.centerOnScreen.y - 5) + random.nextInt(10));
                 Thread.sleep(500);
                 this.robot.mouseMove((leftmostBodyOnScreen.centerOnScreen.x - 5) + random.nextInt(10), (leftmostBodyOnScreen.centerOnScreen.y - 5) + random.nextInt(10));
                 Thread.sleep(500);
+                logger.debug("2nd attempt to extract the data after moving the mouse around");
 
                 while ((System.currentTimeMillis() - start) < 5000L) {
                     synchronized (this.screenConverterResult) {
@@ -237,7 +248,7 @@ public class SysmapScanner {
 
                         this.screenConverterResult.wait();
 
-                        if (this.extractBodyData(this.screenConverterResult.getRgb(), this.screenConverterResult.getHsv(), b)) {
+                        if (this.extractBodyData(this.screenConverterResult.getRgb().clone(), this.screenConverterResult.getHsv().clone(), b)) {
                             break;
                         }
                     }
@@ -265,6 +276,9 @@ public class SysmapScanner {
         if (mUnexplored.getErrorPerPixel() > 0.025f) {
             return false;
         } else {
+            b.unexplored = true;
+            logger.debug("...body is unexplored");
+
             TemplateMatch mArrivalPoint = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, mUnexplored.getX() - 20, mUnexplored.getY() + 20, 170, 55,
                     refArrivalPoint);
             if (mArrivalPoint.getErrorPerPixel() <= 0.025f) {
@@ -273,6 +287,7 @@ public class SysmapScanner {
                 int apX1 = Math.min(b.grayDebugImage.width - 1, apX0 + 225);
                 int apY1 = Math.min(b.grayDebugImage.height - 1, apY0 + 30);
                 String arrivalPointText = this.scanText(b.grayDebugImage.subimage(apX0, apY0, apX1, apY1), textTemplates);
+                logger.debug("...arrivalPointText='" + arrivalPointText + "'");
                 Pattern p = Pattern.compile(".*?((\\d{1,3})([\\.,]\\d{3})*([\\.,]\\d{2})LS).*?");
                 Matcher m = p.matcher(arrivalPointText);
                 if (m.matches()) {
@@ -293,6 +308,7 @@ public class SysmapScanner {
                 int emX1 = Math.min(b.grayDebugImage.width - 1, emX0 + 250);
                 int emY1 = Math.min(b.grayDebugImage.height - 1, emY0 + 30);
                 String earthMassesText = this.scanText(b.grayDebugImage.subimage(emX0, emY0, emX1, emY1), textTemplates);
+                logger.debug("...earthMassesText='" + earthMassesText + "'");
                 Pattern p = Pattern.compile(".*?((\\d{1,3})([\\.,]\\d{3})*([\\.,]\\d{3})).*?");
                 Matcher m = p.matcher(earthMassesText);
                 if (m.matches()) {
@@ -312,6 +328,7 @@ public class SysmapScanner {
                     int radX1 = Math.min(b.grayDebugImage.width - 1, radX0 + 300);
                     int radY1 = Math.min(b.grayDebugImage.height - 1, radY0 + 30);
                     String radiusText = this.scanText(b.grayDebugImage.subimage(radX0, radY0, radX1, radY1), textTemplates);
+                    logger.debug("...radiusText='" + radiusText + "'");
                     p = Pattern.compile(".*?((\\d{1,3})([\\.,]\\d{3})*KM).*?");
                     m = p.matcher(radiusText);
                     if (m.matches()) {
@@ -402,7 +419,11 @@ public class SysmapScanner {
                     g.setColor(Color.CYAN);
                     for (SysmapBody b : bodies) {
                         g.drawRect(b.areaInImage.x, b.areaInImage.y, b.areaInImage.width, b.areaInImage.height);
-                        g.drawString(String.format(Locale.US, "%.6f", b.bestBodyMatch.getErrorPerPixel()), b.areaInImage.x, b.areaInImage.y);
+                        if (b.bestBodyMatch == null) {
+                            g.drawString("???", b.areaInImage.x, b.areaInImage.y);
+                        } else {
+                            g.drawString(String.format(Locale.US, "%.6f", b.bestBodyMatch.getErrorPerPixel()), b.areaInImage.x, b.areaInImage.y);
+                        }
                     }
                     g.dispose();
                     ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " system_map_rgb_result " + systemName + ".png"));
@@ -428,8 +449,10 @@ public class SysmapScanner {
                     if (this.isWriteDebugImageBodyRgbResult()) {
                         Graphics2D g = debugImage.createGraphics();
                         g.setColor(Color.CYAN);
-                        g.drawString(String.format(Locale.US, "%.6f (%s)", b.bestBodyMatch.getErrorPerPixel(), b.bestBodyMatch.getTemplate().getName()), b.areaInImage.x,
-                                b.areaInImage.y);
+                        if (b.bestBodyMatch != null) {
+                            g.drawString(String.format(Locale.US, "%.6f (%s)", b.bestBodyMatch.getErrorPerPixel(), b.bestBodyMatch.getTemplate().getName()), b.areaInImage.x,
+                                    b.areaInImage.y);
+                        }
                         if (b.distanceLs != null) {
                             g.drawString(String.format(Locale.US, "distanceLs=%,.2f", b.distanceLs), b.areaInImage.x, b.areaInImage.y + 15);
                         }

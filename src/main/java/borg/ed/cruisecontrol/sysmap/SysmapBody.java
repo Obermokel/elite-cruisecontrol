@@ -13,6 +13,7 @@ public class SysmapBody {
 
     public Rectangle areaInImage = null;
     public Point centerOnScreen = null;
+    public boolean unexplored = false;
     public TemplateMatchRgb bestBodyMatch = null;
     public BigDecimal distanceLs = null;
     public BigDecimal earthMasses = null;
@@ -56,11 +57,13 @@ public class SysmapBody {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder("SysmapBody[");
         sb.append("area=").append(this.areaInImage.x).append(",").append(this.areaInImage.y).append(" ").append(this.areaInImage.width).append("x").append(this.areaInImage.height);
+        sb.append("; ").append("unexplored=").append(this.unexplored);
         sb.append("; ").append("distanceLs=").append(this.distanceLs);
         sb.append("; ").append("earthMasses=").append(this.earthMasses);
         sb.append("; ").append("radiusKm=").append(this.radiusKm);
+        sb.append("]");
         return sb.toString();
     }
 
