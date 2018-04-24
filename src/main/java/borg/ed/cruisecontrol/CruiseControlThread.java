@@ -14,8 +14,8 @@ import java.text.SimpleDateFormat;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Locale;
 import java.util.Random;
 import java.util.concurrent.Callable;
@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 import boofcv.io.image.ConvertBufferedImage;
 import boofcv.struct.image.GrayF32;
 import boofcv.struct.image.Planar;
+import borg.ed.cruisecontrol.sysmap.SensibleScanOrderComparator;
 import borg.ed.cruisecontrol.sysmap.SysmapBody;
 import borg.ed.cruisecontrol.sysmap.SysmapScanner;
 import borg.ed.cruisecontrol.sysmap.SysmapScannerResult;
@@ -88,8 +89,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     private boolean fsdCharging = false;
     private long fsdChargingSince = Long.MAX_VALUE;
     private String currentSystemName = "";
-    private List<Body> knownValuableBodies = new ArrayList<>();
-    private int discoveredBodiesInSystem = 0;
+    private List<Body> currentSystemKnownBodies = new ArrayList<>();
+    private List<ScanEvent> currentSystemScannedBodies = new ArrayList<>();
+    private int currentSystemNumDiscoveredBodies = 0;
     private SysmapBody currentSysmapBody = null;
     private SysmapScannerResult sysmapScannerResult = null;
     private long lastTick = System.currentTimeMillis();
@@ -368,30 +370,34 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 }
                 if (System.currentTimeMillis() - this.escapingFromStarSince > 10000) {
                     this.escapingFromStarSince = Long.MAX_VALUE;
-                    if (this.discoveredBodiesInSystem > 1 && !CruiseControlApplication.JONK_MODE) {
+                    if (this.currentSystemNumDiscoveredBodies > 1 && !CruiseControlApplication.JONK_MODE) {
                         this.shipControl.setThrottle(0);
                         this.shipControl.toggleSystemMap();
                         this.gameState = GameState.SCAN_SYSTEM_MAP;
-                        logger.debug("Escaped from entry star, " + this.discoveredBodiesInSystem + " bodies discovered, throttle to 0% and scanning system map");
+                        logger.debug("Escaped from entry star, " + this.currentSystemNumDiscoveredBodies + " bodies discovered, throttle to 0% and scan system map");
                     } else {
                         this.shipControl.setThrottle(100);
                         this.shipControl.selectNextSystemInRoute();
                         this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
-                        logger.debug("Escaped from entry star, no other bodies discovered, aligning to next jump target at 100% throttle");
+                        if (CruiseControlApplication.JONK_MODE) {
+                            logger.debug("Escaped from entry star, jonk mode, aligning to next jump target at 100% throttle");
+                        } else {
+                            logger.debug("Escaped from entry star, no other bodies discovered, aligning to next jump target at 100% throttle");
+                        }
                     }
                 }
                 break;
             case SCAN_SYSTEM_MAP:
                 this.sysmapScannerResult = this.sysmapScanner.scanSystemMap(rgb, hsv, this.currentSystemName);
                 if (this.sysmapScannerResult != null) {
-                    if (this.sysmapScannerResult.getBodies().isEmpty()) {
+                    if (this.nextBodyToScan() == null) {
                         // Close sysmap, then throttle up and go to next system in route
                         this.shipControl.toggleSystemMap();
                         Thread.sleep(1000);
                         this.shipControl.setThrottle(100);
                         this.shipControl.selectNextSystemInRoute();
                         this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
-                        logger.debug("System map scanned, no bodies recognized, aligning to next jump target at 100% throttle");
+                        logger.debug("System map scanned, no body to scan, aligning to next jump target at 100% throttle");
                     } else {
                         // Select body from sysmap, then close map and wait for ship HUD
                         this.clickOnNextBodyOnSystemMap();
@@ -898,19 +904,53 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         g.drawString(String.format(Locale.US, "yawRight=%d%% / yawLeft=%d%%", this.shipControl.getYawRight(), this.shipControl.getYawLeft()), 10, 150);
         g.drawString(String.format(Locale.US, "throttle=%d%%", this.shipControl.getThrottle()), 10, 180);
         g.drawString(String.format(Locale.US, "fuel=%.1ft", this.fuelLevel), 10, 210);
+        // system=Name ab-c d10
+        // known=9 | 1x ELW | 1x WW-TF | 2x HMC | 1x M | 4x Icy
+        // guessed=9 | 1x ELW | 1x WW-TF | 1x HMC-TF | 1x HMC | 1x M | 4x Icy
+        // scanned=1/9 | 1x ELW
         g.drawString(String.format(Locale.US, "system=%s", this.currentSystemName), 10, 240);
-        StringBuilder sbKnownValuableBodies = new StringBuilder();
-        for (Body body : this.knownValuableBodies) {
-            sbKnownValuableBodies.append(String.format(Locale.US, " | %s (%,d CR)", body.getName().replace(this.currentSystemName, "").trim(), BodyUtil.estimatePayout(body)));
-        }
-        g.drawString(String.format(Locale.US, "knownBodies=%d%s", this.discoveredBodiesInSystem, sbKnownValuableBodies), 10, 270);
-        StringBuilder sbGuessedBodies = new StringBuilder();
-        if (this.sysmapScannerResult != null) {
-            for (SysmapBody b : this.sysmapScannerResult.getBodies()) {
-                sbGuessedBodies.append(String.format(Locale.US, " | %s", b.bestBodyMatch.getTemplate().getName()));
+        StringBuilder sbKnown = new StringBuilder("known=").append(this.currentSystemKnownBodies.size());
+        if (!this.currentSystemKnownBodies.isEmpty()) {
+            List<Body> bodiesSortedByValue = this.currentSystemKnownBodies.stream()
+                    .sorted((b1, b2) -> -1 * new Long(BodyUtil.estimatePayout(b1)).compareTo(new Long(BodyUtil.estimatePayout(b2)))).collect(Collectors.toList());
+            LinkedHashMap<String, Integer> countByType = new LinkedHashMap<>();
+            for (Body b : bodiesSortedByValue) {
+                String abbrType = BodyUtil.getAbbreviatedType(b);
+                countByType.put(abbrType, countByType.getOrDefault(abbrType, 0) + 1);
+            }
+            for (String abbrType : countByType.keySet()) {
+                sbKnown.append(String.format(Locale.US, " | %dx %s", countByType.get(abbrType), abbrType));
             }
         }
-        g.drawString(String.format(Locale.US, "guessedBodies=%d%s", this.sysmapScannerResult == null ? 0 : this.sysmapScannerResult.getBodies().size(), sbGuessedBodies), 10, 300);
+        g.drawString(sbKnown.toString(), 10, 270);
+        StringBuilder sbGuessed = new StringBuilder("guessed=").append(this.sysmapScannerResult.getBodies().size());
+        if (!this.sysmapScannerResult.getBodies().isEmpty()) {
+            List<SysmapBody> bodiesSortedByValue = this.sysmapScannerResult.getBodies().stream()
+                    .sorted((b1, b2) -> -1 * new Long(SysmapBody.estimatePayout(b1)).compareTo(new Long(SysmapBody.estimatePayout(b2)))).collect(Collectors.toList());
+            LinkedHashMap<String, Integer> countByType = new LinkedHashMap<>();
+            for (SysmapBody b : bodiesSortedByValue) {
+                String abbrType = SysmapBody.getAbbreviatedType(b);
+                countByType.put(abbrType, countByType.getOrDefault(abbrType, 0) + 1);
+            }
+            for (String abbrType : countByType.keySet()) {
+                sbGuessed.append(String.format(Locale.US, " | %dx %s", countByType.get(abbrType), abbrType));
+            }
+        }
+        g.drawString(sbGuessed.toString(), 10, 300);
+        StringBuilder sbScanned = new StringBuilder("scanned=").append(this.currentSystemScannedBodies.size()).append("/").append(this.currentSystemNumDiscoveredBodies);
+        if (!this.currentSystemScannedBodies.isEmpty()) {
+            List<ScanEvent> bodiesSortedByValue = this.currentSystemScannedBodies.stream()
+                    .sorted((b1, b2) -> -1 * new Long(BodyUtil.estimatePayout(b1)).compareTo(new Long(BodyUtil.estimatePayout(b2)))).collect(Collectors.toList());
+            LinkedHashMap<String, Integer> countByType = new LinkedHashMap<>();
+            for (ScanEvent e : bodiesSortedByValue) {
+                String abbrType = BodyUtil.getAbbreviatedType(e);
+                countByType.put(abbrType, countByType.getOrDefault(abbrType, 0) + 1);
+            }
+            for (String abbrType : countByType.keySet()) {
+                sbScanned.append(String.format(Locale.US, " | %dx %s", countByType.get(abbrType), abbrType));
+            }
+        }
+        g.drawString(sbScanned.toString(), 10, 330);
 
         g.dispose();
     }
@@ -988,11 +1028,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         } else if (event instanceof StartJumpEvent) {
             this.shipControl.stopTurning();
             this.inHyperspaceSince = System.currentTimeMillis();
-            this.currentSystemName = ((StartJumpEvent) event).getStarSystem();
-            this.knownValuableBodies = this.universeService.findBodiesByStarSystemName(((StartJumpEvent) event).getStarSystem()).stream()
-                    .filter(b -> b.getDistanceToArrival().longValue() < 10000 && BodyUtil.estimatePayout(b) >= 100000)
-                    .sorted((b1, b2) -> (b1.getName().toLowerCase().compareTo(b2.getName().toLowerCase()))).collect(Collectors.toList());
-            this.discoveredBodiesInSystem = 0;
+            this.currentSystemName = "";
+            this.currentSystemKnownBodies.clear();
+            this.currentSystemScannedBodies.clear();
+            this.currentSystemNumDiscoveredBodies = 0;
             this.sysmapScannerResult = null;
             this.gameState = GameState.IN_HYPERSPACE;
             logger.debug("Jumping through hyperspace to " + ((StartJumpEvent) event).getStarSystem());
@@ -1001,42 +1040,45 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             this.fuelLevel = ((FSDJumpEvent) event).getFuelLevel().floatValue();
             this.inHyperspaceSince = Long.MAX_VALUE;
             this.shipControl.honkDelayed(1000);
+            this.currentSystemName = ((FSDJumpEvent) event).getStarSystem();
+            this.currentSystemKnownBodies = this.universeService.findBodiesByStarSystemName(((FSDJumpEvent) event).getStarSystem());
             this.gameState = GameState.WAIT_FOR_FSD_COOLDOWN;
             logger.debug("Arrived at " + ((FSDJumpEvent) event).getStarSystem() + ", honking and waiting for FSD cooldown to start");
         } else if (event instanceof FuelScoopEvent) {
             this.fuelLevel = ((FuelScoopEvent) event).getTotal().floatValue();
         } else if (event instanceof DiscoveryScanEvent) {
-            this.discoveredBodiesInSystem += MiscUtil.getAsInt(((DiscoveryScanEvent) event).getBodies(), 0);
+            this.currentSystemNumDiscoveredBodies += MiscUtil.getAsInt(((DiscoveryScanEvent) event).getBodies(), 0);
         } else if (event instanceof ScanEvent) {
             if (this.currentSysmapBody != null) {
                 this.shipControl.setThrottle(0);
                 this.shipControl.stopTurning();
-                String realPlanetClass = ((ScanEvent) event).getPlanetClass();
-                if (StringUtils.isEmpty(realPlanetClass)) {
-                    realPlanetClass = "Class " + ((ScanEvent) event).getStarType() + " star";
+                this.currentSysmapBody.unexplored = false;
+                this.currentSystemScannedBodies.add((ScanEvent) event);
+                String scannedBodyType = ((ScanEvent) event).getPlanetClass();
+                if (StringUtils.isEmpty(scannedBodyType)) {
+                    scannedBodyType = ((ScanEvent) event).getStarType();
                 }
-                String guessedPlanetClass = this.currentSysmapBody.bestBodyMatch.getTemplate().getName();
-                if (StringUtils.isNotEmpty(realPlanetClass) && !realPlanetClass.equals(guessedPlanetClass)) {
-                    logger.warn("Wrongly guessed " + guessedPlanetClass + ", but was " + realPlanetClass);
+                String guessedBodyType = this.currentSysmapBody.bestBodyMatch.getTemplate().getName();
+                if (StringUtils.isNotEmpty(scannedBodyType) && !scannedBodyType.equals(guessedBodyType)) {
+                    logger.warn("Wrongly guessed " + guessedBodyType + ", but was " + scannedBodyType);
                     try {
                         BufferedImage planetImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(this.currentSysmapBody.bestBodyMatch.getImage()), null, true);
-                        File refFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/sysMapPlanets/" + realPlanetClass);
+                        File refFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/sysmapBodies/" + scannedBodyType);
                         if (!refFolder.exists()) {
                             refFolder.mkdirs();
                         }
                         final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
-                        ImageIO.write(planetImage, "PNG", new File(refFolder, realPlanetClass + " " + ts + " " + this.currentSystemName + ".png"));
+                        ImageIO.write(planetImage, "PNG", new File(refFolder, scannedBodyType + " " + ts + " " + this.currentSystemName + ".png"));
                         this.sysmapScanner.reloadTemplates();
                     } catch (IOException e) {
                         logger.warn("Failed to write planet ref image", e);
                     }
                 } else {
-                    logger.info("Correctly guessed " + guessedPlanetClass + ", and was " + realPlanetClass);
+                    logger.info("Correctly guessed " + guessedBodyType + ", and was " + scannedBodyType);
                 }
 
                 this.currentSysmapBody = null;
-                this.knownValuableBodies = this.knownValuableBodies.stream().filter(b -> !b.getName().equals(((ScanEvent) event).getBodyName())).collect(Collectors.toList());
-                if (this.sysmapScannerResult.getBodies().isEmpty()) {
+                if (this.nextBodyToScan() == null) {
                     this.shipControl.setThrottle(100);
                     this.shipControl.selectNextSystemInRoute();
                     this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
@@ -1053,16 +1095,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     }
 
     private void clickOnNextBodyOnSystemMap() {
-        this.currentSysmapBody = this.sysmapScannerResult.getBodies().remove(0);
-
-        // We accept one scan without known or large distance. But now remove all of those bodies.
-        ListIterator<SysmapBody> it = this.sysmapScannerResult.getBodies().listIterator();
-        while (it.hasNext()) {
-            SysmapBody b = it.next();
-            if (b.distanceLs == null || b.distanceLs.floatValue() > 12345f) {
-                it.remove();
-            }
-        }
+        this.currentSysmapBody = this.nextBodyToScan();
 
         try {
             Thread.sleep(1000); // TODO Necessary?
@@ -1103,6 +1136,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         } catch (InterruptedException e) {
             logger.warn("Interrupted while clicking on system map", e);
         }
+    }
+
+    private SysmapBody nextBodyToScan() {
+        return this.sysmapScannerResult.getBodies().stream().filter(b -> b.unexplored && (b.distanceLs == null || b.distanceLs.floatValue() <= 12345f))
+                .sorted(new SensibleScanOrderComparator()).findFirst().orElse(null);
     }
 
 }

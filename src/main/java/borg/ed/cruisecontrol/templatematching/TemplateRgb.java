@@ -65,7 +65,7 @@ public class TemplateRgb {
                 }
             });
             for (File file : files) {
-                result.add(TemplateRgb.fromFile(file, setDir.getName()));
+                result.add(TemplateRgb.fromFile(file, nameDir.getName()));
             }
         }
         return result;

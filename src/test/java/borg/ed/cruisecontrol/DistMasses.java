@@ -50,7 +50,7 @@ public class DistMasses {
         Template refArrivalPoint = Template.fromFile(new File(refDir, "arrival_point.png"));
         Template refEarthMasses = Template.fromFile(new File(refDir, "earth_masses.png"));
         Template refRadius = Template.fromFile(new File(refDir, "radius.png"));
-        List<Template> textTemplates = Template.fromFolder(new File(refDir, "sysMapText"));
+        List<Template> textTemplates = Template.fromFolder(new File(refDir, "sysmapText"));
 
         for (File testFile : testFiles) {
             logger.debug("Processing " + testFile.getName());

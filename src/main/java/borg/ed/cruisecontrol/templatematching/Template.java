@@ -64,7 +64,7 @@ public class Template {
                 }
             });
             for (File file : files) {
-                result.add(Template.fromFile(file, setDir.getName()));
+                result.add(Template.fromFile(file, nameDir.getName()));
             }
         }
         return result;

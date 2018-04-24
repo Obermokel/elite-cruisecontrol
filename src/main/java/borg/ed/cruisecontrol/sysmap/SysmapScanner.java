@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.ListIterator;
@@ -188,10 +187,6 @@ public class SysmapScanner {
                     b.bestBodyMatch = bestMatch;
                 }
             }
-
-            // Sort
-            Collections.sort(bodies, new SensibleScanOrderComparator());
-            logger.debug("Sorted bodies for efficient scan order");
 
             // Finished
             logger.info(String.format(Locale.US, "System map scan took %,d ms, found %d bodies", System.currentTimeMillis() - scanStart, bodies.size()));
@@ -397,8 +392,8 @@ public class SysmapScanner {
             this.refArrivalPoint = Template.fromFile(new File(refDir, "arrival_point.png"));
             this.refEarthMasses = Template.fromFile(new File(refDir, "earth_masses.png"));
             this.refRadius = Template.fromFile(new File(refDir, "radius.png"));
-            this.textTemplates = Template.fromFolder(new File(refDir, "sysMapText"));
-            this.refSysMapBodies = TemplateRgb.fromFolder(new File(refDir, "sysMapBodies"));
+            this.textTemplates = Template.fromFolder(new File(refDir, "sysmapText"));
+            this.refSysMapBodies = TemplateRgb.fromFolder(new File(refDir, "sysmapBodies"));
         } catch (IOException e) {
             logger.error("Failed to load ref images", e);
         }
