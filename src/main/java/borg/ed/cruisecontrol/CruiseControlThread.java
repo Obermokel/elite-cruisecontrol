@@ -1028,7 +1028,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                         }
                         final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
                         ImageIO.write(planetImage, "PNG", new File(refFolder, realPlanetClass + " " + ts + " " + this.currentSystemName + ".png"));
-                        this.loadRefImages();
+                        this.sysmapScanner.reloadTemplates();
                     } catch (IOException e) {
                         logger.warn("Failed to write planet ref image", e);
                     }
