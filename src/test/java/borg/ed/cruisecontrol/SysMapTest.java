@@ -52,7 +52,7 @@ public class SysMapTest {
 			Planar<GrayF32> rgb = ImageUtil.normalize255(ConvertBufferedImage.convertFromMulti(bi, (Planar<GrayF32>) null, true, GrayF32.class));
 			Planar<GrayF32> hsv = rgb.createSameShape();
 			ColorHsv.rgbToHsv_F32(rgb, hsv);
-			if (sysmapScanner.waitForSystemMap(rgb)) {
+			if (sysmapScanner.isUniversalCartographicsLogoVisible(rgb)) {
 				sysmapScanner.scanSystemMap(rgb, hsv, systemName);
 			}
 		}

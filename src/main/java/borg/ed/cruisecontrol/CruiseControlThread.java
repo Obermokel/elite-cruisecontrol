@@ -455,7 +455,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					break;
 				case WAIT_FOR_SYSTEM_MAP:
 					synchronized (screenConverterResult) {
-						if (this.sysmapScanner.waitForSystemMap(screenConverterResult.getRgb().clone())) {
+						if (this.sysmapScanner.isUniversalCartographicsLogoVisible(screenConverterResult.getRgb().clone())) {
 							this.clickOnNextBodyOnSystemMap();
 							this.shipControl.toggleSystemMap();
 							this.shipControl.setThrottle(0);

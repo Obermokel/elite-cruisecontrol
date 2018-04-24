@@ -84,7 +84,7 @@ public class SysmapScanner {
         this.reloadTemplates();
     }
 
-    public boolean waitForSystemMap(Planar<GrayF32> rgb) {
+    public boolean isUniversalCartographicsLogoVisible(Planar<GrayF32> rgb) {
         return TemplateMatcher.findBestMatchingLocationInRegion(rgb, 0, 0, 280, 100, this.refUcLogo).getErrorPerPixel() <= 0.0005f;
     }
 
@@ -93,7 +93,7 @@ public class SysmapScanner {
      */
     public SysmapScannerResult scanSystemMap(Planar<GrayF32> rgb, Planar<GrayF32> hsv, String systemName) {
         // Search for the UC logo - if found, the system map is open and can be scanned
-        if (!this.waitForSystemMap(rgb)) {
+        if (!this.isUniversalCartographicsLogoVisible(rgb)) {
             return null;
         } else {
             logger.debug("Start scanning system map");
