@@ -1,5 +1,6 @@
 package borg.ed.cruisecontrol.gui;
 
+import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -16,52 +17,58 @@ import borg.ed.cruisecontrol.util.ImageUtil;
 
 public class DebugPanel extends JPanel {
 
-	private static final long serialVersionUID = 8584552527591588384L;
+    private static final long serialVersionUID = 8584552527591588384L;
 
-	private BufferedImage debugImage = null;
+    private BufferedImage debugImage = null;
 
-	private GrayF32 orangeHudImage = null;
-	private GrayF32 blueWhiteHudImage = null;
-	private GrayF32 redHudImage = null;
-	private GrayF32 brightImage = null;
+    private GrayF32 orangeHudImage = null;
+    private GrayF32 blueWhiteHudImage = null;
+    private GrayF32 redHudImage = null;
+    private GrayF32 brightImage = null;
 
-	public DebugPanel() {
-	}
+    public DebugPanel() {
 
-	public void updateScreenCapture(BufferedImage debugImage, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
-		this.debugImage = debugImage;
+    }
 
-		this.orangeHudImage = orangeHudImage;
-		this.blueWhiteHudImage = blueWhiteHudImage;
-		this.redHudImage = redHudImage;
-		this.brightImage = brightImage;
+    public void updateScreenCapture(BufferedImage debugImage, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
+        this.debugImage = debugImage;
 
-		this.repaint();
-	}
+        this.orangeHudImage = orangeHudImage;
+        this.blueWhiteHudImage = blueWhiteHudImage;
+        this.redHudImage = redHudImage;
+        this.brightImage = brightImage;
 
-	public void writeScreenCapture() {
-		try {
-			File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
-			final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
+        this.repaint();
+    }
 
-			ImageIO.write(this.debugImage, "PNG", new File(debugFolder, ts + " 000 debug.png"));
+    public void writeScreenCapture() {
+        try {
+            File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
+            final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
 
-			ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.orangeHudImage), null), "PNG", new File(debugFolder, ts + " CruiseControlDebug 010 orange.png"));
-			ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.blueWhiteHudImage), null), "PNG", new File(debugFolder, ts + " CruiseControlDebug 011 blue-white.png"));
-			ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.redHudImage), null), "PNG", new File(debugFolder, ts + " CruiseControlDebug 012 red.png"));
-			ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.brightImage), null), "PNG", new File(debugFolder, ts + " CruiseControlDebug 013 bright.png"));
-		} catch (IOException e1) {
-			e1.printStackTrace();
-		}
-	}
+            ImageIO.write(this.debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " cc_view_00_result.png"));
 
-	@Override
-	protected void paintComponent(Graphics g) {
-		super.paintComponent(g);
+            ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.orangeHudImage), null), "PNG",
+                    new File(debugFolder, "DEBUG " + ts + " cc_view_10_orange.png"));
+            ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.blueWhiteHudImage), null), "PNG",
+                    new File(debugFolder, "DEBUG " + ts + " cc_view_11_bluewhite.png"));
+            ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.redHudImage), null), "PNG", new File(debugFolder, "DEBUG " + ts + " cc_view_12_red.png"));
+            ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.brightImage), null), "PNG", new File(debugFolder, "DEBUG " + ts + " cc_view_20_bright.png"));
+        } catch (IOException e1) {
+            e1.printStackTrace();
+        }
+    }
 
-		if (this.debugImage != null) {
-			g.drawImage(ImageUtil.scaleTo(this.debugImage, this.getWidth(), this.getHeight()), 0, 0, null);
-		}
-	}
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+
+        if (this.debugImage != null) {
+            g.drawImage(ImageUtil.scaleTo(this.debugImage, this.getWidth(), this.getHeight()), 0, 0, null);
+        } else {
+            g.setColor(Color.BLACK);
+            g.fillRect(0, 0, this.getWidth(), this.getHeight());
+        }
+    }
 
 }

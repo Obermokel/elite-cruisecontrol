@@ -184,10 +184,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 // <<<< PROCESSING THE DATA <<<<
 
                 // >>>> DEBUG IMAGE >>>>
-                this.drawColoredDebugImage(debugImage, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
-                this.drawDebugInfoOnImage(debugImage, compassDotMatch);
-                for (DebugImageListener listener : this.debugImageListeners) {
-                    listener.onNewDebugImage(debugImage, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
+                if (CruiseControlApplication.SHOW_LIVE_DEBUG_IMAGE) {
+                    this.drawColoredDebugImage(debugImage, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
+                    this.drawDebugInfoOnImage(debugImage, compassDotMatch);
+                    for (DebugImageListener listener : this.debugImageListeners) {
+                        listener.onNewDebugImage(debugImage, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
+                    }
                 }
                 // <<<< DEBUG IMAGE <<<<
             } catch (Exception e) {
