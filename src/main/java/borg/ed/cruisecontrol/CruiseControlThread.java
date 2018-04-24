@@ -205,27 +205,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                     targetMatch = null;
                 }
 
-                if (gameState == GameState.APPROACH_NEXT_BODY) {
-                    if (targetMatch == null) {
-                        sixSecondsMatch = null;
-                    } else {
-                        int sixSecondsX = targetMatch.getX() + 90;
-                        int sixSecondsY = targetMatch.getY() + 75;
-                        sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(brightImage, sixSecondsX, sixSecondsY, 82, 28, this.refSixSeconds);
-                        if (sixSecondsMatch.getErrorPerPixel() > 0.15f) {
-                            sixSecondsMatch = null;
-                        }
-                    }
-
-                    scanningMatch = TemplateMatcher.findBestMatchingLocationInRegion(orangeHudImage, 2, 860, 180, 110, this.refScanning);
-                    if (scanningMatch.getErrorPerPixel() > 0.05f) {
-                        scanningMatch = null;
-                    }
-                } else {
-                    sixSecondsMatch = null;
-                    scanningMatch = null;
-                }
-
                 TemplateMatch compassDotMatch = null;
                 boolean hollow = false;
                 if (compassMatch != null) {
@@ -257,6 +236,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                     }
                 }
 
+                this.searchForSixSecondsOrScanning(orangeHudImage, brightImage);
+
+                this.handleGameState(rgb, hsv, orangeHudImage, compassDotMatch, hollow);
+
                 // >>>> DEBUG IMAGE >>>>
                 //ConvertBufferedImage.convertTo(orangeHudImage, debugImage);
 
@@ -267,236 +250,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                     listener.onNewDebugImage(debugImage, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
                 }
                 // <<<< DEBUG IMAGE <<<<
-
-                switch (this.gameState) {
-                    case UNKNOWN:
-                        this.shipControl.releaseAllKeys();
-                        break;
-                    case FSD_CHARGING:
-                        if (this.shipControl.getThrottle() < 100) {
-                            this.shipControl.setThrottle(100);
-                        }
-                        if (System.currentTimeMillis() - this.fsdChargingSince > 15000) {
-                            if (this.shipControl.getThrottle() != 75) {
-                                this.shipControl.setThrottle(75);
-                            }
-                        } else if (System.currentTimeMillis() - this.fsdChargingSince > 20000) {
-                            if (this.shipControl.getThrottle() != 100) {
-                                this.shipControl.setThrottle(100);
-                            }
-                        }
-                        if (targetMatch != null) {
-                            this.alignToTargetInHud(targetMatch);
-                        } else {
-                            this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow);
-                        }
-                        break;
-                    case IN_HYPERSPACE:
-                        if (System.currentTimeMillis() - this.inHyperspaceSince > 5000 && this.shipControl.getThrottle() > 0) {
-                            this.shipControl.setThrottle(0);
-                        }
-                        break;
-                    case WAIT_FOR_FSD_COOLDOWN:
-                        if (this.shipControl.getThrottle() > 0) {
-                            this.shipControl.setThrottle(0);
-                        }
-                        break;
-                    case GET_IN_SCOOPING_RANGE:
-                        if (this.shipControl.getThrottle() != 25) {
-                            this.shipControl.setThrottle(25);
-                        }
-                        if (this.scoopingFuel) {
-                            this.shipControl.setThrottle(0);
-                            this.gameState = GameState.SCOOPING_FUEL;
-                            logger.debug("Scooping fuel...");
-                        }
-                        break;
-                    case SCOOPING_FUEL:
-                        if (this.fuelLevel >= (CruiseControlApplication.MAX_FUEL / 2)) {
-                            this.gameState = GameState.ALIGN_TO_STAR_ESCAPE;
-                            logger.debug("Fuel tank filled > 50%, aligning to star escape vector");
-                        }
-                        break;
-                    case ALIGN_TO_STAR_ESCAPE:
-                        if (this.brightnessAhead > 0.05f) {
-                            this.shipControl.setPitchDown(100);
-                        } else {
-                            this.shipControl.stopTurning();
-                            this.gameState = GameState.ESCAPE_FROM_STAR_SLOW;
-                            logger.debug("Escape vector reached, accelerating to 25%");
-                        }
-                        break;
-                    case ESCAPE_FROM_STAR_SLOW:
-                        if (this.fuelLevel >= CruiseControlApplication.MAX_FUEL) {
-                            if (this.shipControl.getThrottle() != 50) {
-                                this.shipControl.setThrottle(50);
-                                logger.debug("Fuel tank full, accelerating to 50%");
-                            }
-                        } else {
-                            if (this.shipControl.getThrottle() != 25) {
-                                this.shipControl.setThrottle(25);
-                            }
-                        }
-                        if (this.brightnessAhead > 0.10f) {
-                            this.shipControl.setPitchDown(100);
-                        } else {
-                            this.shipControl.stopTurning();
-                        }
-                        if (!this.scoopingFuel) {
-                            this.escapingFromStarSince = System.currentTimeMillis();
-                            this.gameState = GameState.ESCAPE_FROM_STAR_FASTER;
-                            logger.debug("Scooping range left, accelerating to 75%");
-                        }
-                        break;
-                    case ESCAPE_FROM_STAR_FASTER:
-                        if (this.shipControl.getThrottle() != 75) {
-                            this.shipControl.setThrottle(75);
-                        }
-                        if (this.brightnessAhead > 0.15f) {
-                            this.shipControl.setPitchDown(100);
-                        } else {
-                            this.shipControl.stopTurning();
-                        }
-                        if (System.currentTimeMillis() - this.escapingFromStarSince > 10000) {
-                            this.escapingFromStarSince = Long.MAX_VALUE;
-                            if (this.discoveredBodiesInSystem > 1 && !CruiseControlApplication.JONK_MODE) {
-                                this.shipControl.setThrottle(0);
-                                this.shipControl.toggleSystemMap();
-                                this.gameState = GameState.SCAN_SYSTEM_MAP;
-                                logger.debug("Escaped from entry star, " + this.discoveredBodiesInSystem + " bodies discovered, throttle to 0% and scanning system map");
-                            } else {
-                                this.shipControl.setThrottle(100);
-                                this.shipControl.selectNextSystemInRoute();
-                                this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
-                                logger.debug("Escaped from entry star, no other bodies discovered, aligning to next jump target at 100% throttle");
-                            }
-                        }
-                        break;
-                    case SCAN_SYSTEM_MAP:
-                        this.sysmapScannerResult = this.sysmapScanner.scanSystemMap(rgb, hsv, this.currentSystemName);
-                        if (this.sysmapScannerResult != null) {
-                            if (this.sysmapScannerResult.getBodies().isEmpty()) {
-                                // Close sysmap, then throttle up and go to next system in route
-                                this.shipControl.toggleSystemMap();
-                                Thread.sleep(1000);
-                                this.shipControl.setThrottle(100);
-                                this.shipControl.selectNextSystemInRoute();
-                                this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
-                                logger.debug("System map scanned, no bodies recognized, aligning to next jump target at 100% throttle");
-                            } else {
-                                // Select body from sysmap, then close map and wait for ship HUD
-                                this.clickOnNextBodyOnSystemMap();
-                                this.shipControl.toggleSystemMap();
-                                this.shipControl.setThrottle(0);
-                                this.gameState = GameState.WAIT_FOR_SHIP_HUD;
-                                logger.debug("System map scanned, waiting for ship HUD at 0% throttle");
-                            }
-                        }
-                        break;
-                    case ALIGN_TO_NEXT_BODY:
-                        if (this.brightnessAhead > 0.15f) {
-                            if (this.shipControl.getThrottle() != 25) {
-                                this.shipControl.setThrottle(25);
-                            }
-                            this.shipControl.setPitchDown(100);
-                        } else {
-                            if (targetMatch != null) {
-                                if (this.shipControl.getThrottle() != 0) {
-                                    this.shipControl.setThrottle(0);
-                                }
-                                if (this.alignToTargetInHud(targetMatch)) {
-                                    this.shipControl.setThrottle(75);
-                                    this.gameState = GameState.APPROACH_NEXT_BODY;
-                                    logger.debug("Next body in sight, accelerating to 75% and waiting for detailed surface scan");
-                                }
-                            } else if (compassMatch != null && compassDotMatch != null) {
-                                if (this.shipControl.getThrottle() != 0) {
-                                    this.shipControl.setThrottle(0);
-                                }
-                                if (this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow)) {
-                                    this.shipControl.setThrottle(75);
-                                    this.gameState = GameState.APPROACH_NEXT_BODY;
-                                    logger.debug("Next body in sight, accelerating to 75% and waiting for detailed surface scan");
-                                }
-                            } else {
-                                if (this.shipControl.getThrottle() != 25) {
-                                    this.shipControl.setThrottle(25);
-                                }
-                            }
-                        }
-                        break;
-                    case APPROACH_NEXT_BODY:
-                        if (this.brightnessAhead > 0.15f) {
-                            if (this.shipControl.getThrottle() != 25) {
-                                this.shipControl.setThrottle(25);
-                            }
-                            this.shipControl.setPitchDown(100);
-                        } else {
-                            if (scanningMatch != null) {
-                                if (this.shipControl.getThrottle() != 0) {
-                                    this.shipControl.setThrottle(0);
-                                }
-                            } else if (sixSecondsMatch != null) {
-                                if (this.shipControl.getThrottle() != 75) {
-                                    this.shipControl.setThrottle(75);
-                                }
-                            } else if (targetMatch == null) {
-                                if (this.shipControl.getThrottle() != 0) {
-                                    this.shipControl.setThrottle(0);
-                                }
-                            } else {
-                                if (this.shipControl.getThrottle() != 100) {
-                                    this.shipControl.setThrottle(100);
-                                }
-                            }
-                            if (targetMatch != null) {
-                                this.alignToTargetInHud(targetMatch);
-                            } else {
-                                this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow);
-                            }
-                        }
-                        break;
-                    case WAIT_FOR_SYSTEM_MAP:
-                        if (this.sysmapScanner.isUniversalCartographicsLogoVisible(rgb)) {
-                            this.clickOnNextBodyOnSystemMap();
-                            this.shipControl.toggleSystemMap();
-                            this.shipControl.setThrottle(0);
-                            this.gameState = GameState.WAIT_FOR_SHIP_HUD;
-                            logger.debug("Clicked on next body, waiting for ship HUD at 0% throttle");
-                        }
-                        break;
-                    case WAIT_FOR_SHIP_HUD:
-                        if (this.isShipHudVisible(orangeHudImage)) {
-                            this.shipControl.setThrottle(25);
-                            this.gameState = GameState.ALIGN_TO_NEXT_BODY;
-                            logger.debug("Ship HUD visible, aligning to next body at 25% throttle");
-                        }
-                        break;
-                    case ALIGN_TO_NEXT_SYSTEM:
-                        if (this.shipControl.getThrottle() < 100) {
-                            this.shipControl.setThrottle(100);
-                        }
-                        if (targetMatch != null) {
-                            if (this.alignToTargetInHud(targetMatch)) {
-                                this.shipControl.toggleFsd();
-                                this.gameState = GameState.FSD_CHARGING;
-                                logger.debug("Next system in sight, charging FSD");
-                            }
-                        } else {
-                            if (this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow)) {
-                                this.shipControl.toggleFsd();
-                                this.gameState = GameState.FSD_CHARGING;
-                                logger.debug("Next system in sight, charging FSD");
-                            }
-                        }
-                        break;
-                    case IN_EMERGENCY_EXIT:
-                        logger.debug("In emergency exit...");
-                        break;
-                    default:
-                        this.doEmergencyExit("Unknown game state " + this.gameState);
-                        break;
-                }
             } catch (Exception e) {
                 logger.error(this.getName() + " crashed", e);
                 break; // Quit
@@ -504,6 +257,261 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         }
 
         logger.info(this.getName() + " stopped");
+    }
+
+    private void searchForSixSecondsOrScanning(GrayF32 orangeHudImage, GrayF32 brightImage) {
+        if (gameState == GameState.APPROACH_NEXT_BODY) {
+            if (targetMatch == null) {
+                sixSecondsMatch = null;
+            } else {
+                int sixSecondsX = targetMatch.getX() + 90;
+                int sixSecondsY = targetMatch.getY() + 75;
+                sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(brightImage, sixSecondsX, sixSecondsY, 82, 28, this.refSixSeconds);
+                if (sixSecondsMatch.getErrorPerPixel() > 0.15f) {
+                    sixSecondsMatch = null;
+                }
+            }
+
+            scanningMatch = TemplateMatcher.findBestMatchingLocationInRegion(orangeHudImage, 2, 860, 180, 110, this.refScanning);
+            if (scanningMatch.getErrorPerPixel() > 0.05f) {
+                scanningMatch = null;
+            }
+        } else {
+            sixSecondsMatch = null;
+            scanningMatch = null;
+        }
+    }
+
+    private void handleGameState(Planar<GrayF32> rgb, Planar<GrayF32> hsv, GrayF32 orangeHudImage, TemplateMatch compassDotMatch, boolean hollow) throws InterruptedException {
+        switch (this.gameState) {
+            case UNKNOWN:
+                this.shipControl.releaseAllKeys();
+                break;
+            case FSD_CHARGING:
+                if (this.shipControl.getThrottle() < 100) {
+                    this.shipControl.setThrottle(100);
+                }
+                if (System.currentTimeMillis() - this.fsdChargingSince > 15000) {
+                    if (this.shipControl.getThrottle() != 75) {
+                        this.shipControl.setThrottle(75);
+                    }
+                } else if (System.currentTimeMillis() - this.fsdChargingSince > 20000) {
+                    if (this.shipControl.getThrottle() != 100) {
+                        this.shipControl.setThrottle(100);
+                    }
+                }
+                if (targetMatch != null) {
+                    this.alignToTargetInHud(targetMatch);
+                } else {
+                    this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow);
+                }
+                break;
+            case IN_HYPERSPACE:
+                if (System.currentTimeMillis() - this.inHyperspaceSince > 5000 && this.shipControl.getThrottle() > 0) {
+                    this.shipControl.setThrottle(0);
+                }
+                break;
+            case WAIT_FOR_FSD_COOLDOWN:
+                if (this.shipControl.getThrottle() > 0) {
+                    this.shipControl.setThrottle(0);
+                }
+                break;
+            case GET_IN_SCOOPING_RANGE:
+                if (this.shipControl.getThrottle() != 25) {
+                    this.shipControl.setThrottle(25);
+                }
+                if (this.scoopingFuel) {
+                    this.shipControl.setThrottle(0);
+                    this.gameState = GameState.SCOOPING_FUEL;
+                    logger.debug("Scooping fuel...");
+                }
+                break;
+            case SCOOPING_FUEL:
+                if (this.fuelLevel >= (CruiseControlApplication.MAX_FUEL / 2)) {
+                    this.gameState = GameState.ALIGN_TO_STAR_ESCAPE;
+                    logger.debug("Fuel tank filled > 50%, aligning to star escape vector");
+                }
+                break;
+            case ALIGN_TO_STAR_ESCAPE:
+                if (this.brightnessAhead > 0.05f) {
+                    this.shipControl.setPitchDown(100);
+                } else {
+                    this.shipControl.stopTurning();
+                    this.gameState = GameState.ESCAPE_FROM_STAR_SLOW;
+                    logger.debug("Escape vector reached, accelerating to 25%");
+                }
+                break;
+            case ESCAPE_FROM_STAR_SLOW:
+                if (this.fuelLevel >= CruiseControlApplication.MAX_FUEL) {
+                    if (this.shipControl.getThrottle() != 50) {
+                        this.shipControl.setThrottle(50);
+                        logger.debug("Fuel tank full, accelerating to 50%");
+                    }
+                } else {
+                    if (this.shipControl.getThrottle() != 25) {
+                        this.shipControl.setThrottle(25);
+                    }
+                }
+                if (this.brightnessAhead > 0.10f) {
+                    this.shipControl.setPitchDown(100);
+                } else {
+                    this.shipControl.stopTurning();
+                }
+                if (!this.scoopingFuel) {
+                    this.escapingFromStarSince = System.currentTimeMillis();
+                    this.gameState = GameState.ESCAPE_FROM_STAR_FASTER;
+                    logger.debug("Scooping range left, accelerating to 75%");
+                }
+                break;
+            case ESCAPE_FROM_STAR_FASTER:
+                if (this.shipControl.getThrottle() != 75) {
+                    this.shipControl.setThrottle(75);
+                }
+                if (this.brightnessAhead > 0.15f) {
+                    this.shipControl.setPitchDown(100);
+                } else {
+                    this.shipControl.stopTurning();
+                }
+                if (System.currentTimeMillis() - this.escapingFromStarSince > 10000) {
+                    this.escapingFromStarSince = Long.MAX_VALUE;
+                    if (this.discoveredBodiesInSystem > 1 && !CruiseControlApplication.JONK_MODE) {
+                        this.shipControl.setThrottle(0);
+                        this.shipControl.toggleSystemMap();
+                        this.gameState = GameState.SCAN_SYSTEM_MAP;
+                        logger.debug("Escaped from entry star, " + this.discoveredBodiesInSystem + " bodies discovered, throttle to 0% and scanning system map");
+                    } else {
+                        this.shipControl.setThrottle(100);
+                        this.shipControl.selectNextSystemInRoute();
+                        this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+                        logger.debug("Escaped from entry star, no other bodies discovered, aligning to next jump target at 100% throttle");
+                    }
+                }
+                break;
+            case SCAN_SYSTEM_MAP:
+                this.sysmapScannerResult = this.sysmapScanner.scanSystemMap(rgb, hsv, this.currentSystemName);
+                if (this.sysmapScannerResult != null) {
+                    if (this.sysmapScannerResult.getBodies().isEmpty()) {
+                        // Close sysmap, then throttle up and go to next system in route
+                        this.shipControl.toggleSystemMap();
+                        Thread.sleep(1000);
+                        this.shipControl.setThrottle(100);
+                        this.shipControl.selectNextSystemInRoute();
+                        this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+                        logger.debug("System map scanned, no bodies recognized, aligning to next jump target at 100% throttle");
+                    } else {
+                        // Select body from sysmap, then close map and wait for ship HUD
+                        this.clickOnNextBodyOnSystemMap();
+                        this.shipControl.toggleSystemMap();
+                        this.shipControl.setThrottle(0);
+                        this.gameState = GameState.WAIT_FOR_SHIP_HUD;
+                        logger.debug("System map scanned, waiting for ship HUD at 0% throttle");
+                    }
+                }
+                break;
+            case ALIGN_TO_NEXT_BODY:
+                if (this.brightnessAhead > 0.15f) {
+                    if (this.shipControl.getThrottle() != 25) {
+                        this.shipControl.setThrottle(25);
+                    }
+                    this.shipControl.setPitchDown(100);
+                } else {
+                    if (targetMatch != null) {
+                        if (this.shipControl.getThrottle() != 0) {
+                            this.shipControl.setThrottle(0);
+                        }
+                        if (this.alignToTargetInHud(targetMatch)) {
+                            this.shipControl.setThrottle(75);
+                            this.gameState = GameState.APPROACH_NEXT_BODY;
+                            logger.debug("Next body in sight, accelerating to 75% and waiting for detailed surface scan");
+                        }
+                    } else if (compassMatch != null && compassDotMatch != null) {
+                        if (this.shipControl.getThrottle() != 0) {
+                            this.shipControl.setThrottle(0);
+                        }
+                        if (this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow)) {
+                            this.shipControl.setThrottle(75);
+                            this.gameState = GameState.APPROACH_NEXT_BODY;
+                            logger.debug("Next body in sight, accelerating to 75% and waiting for detailed surface scan");
+                        }
+                    } else {
+                        if (this.shipControl.getThrottle() != 25) {
+                            this.shipControl.setThrottle(25);
+                        }
+                    }
+                }
+                break;
+            case APPROACH_NEXT_BODY:
+                if (this.brightnessAhead > 0.15f) {
+                    if (this.shipControl.getThrottle() != 25) {
+                        this.shipControl.setThrottle(25);
+                    }
+                    this.shipControl.setPitchDown(100);
+                } else {
+                    if (scanningMatch != null) {
+                        if (this.shipControl.getThrottle() != 0) {
+                            this.shipControl.setThrottle(0);
+                        }
+                    } else if (sixSecondsMatch != null) {
+                        if (this.shipControl.getThrottle() != 75) {
+                            this.shipControl.setThrottle(75);
+                        }
+                    } else if (targetMatch == null) {
+                        if (this.shipControl.getThrottle() != 0) {
+                            this.shipControl.setThrottle(0);
+                        }
+                    } else {
+                        if (this.shipControl.getThrottle() != 100) {
+                            this.shipControl.setThrottle(100);
+                        }
+                    }
+                    if (targetMatch != null) {
+                        this.alignToTargetInHud(targetMatch);
+                    } else {
+                        this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow);
+                    }
+                }
+                break;
+            case WAIT_FOR_SYSTEM_MAP:
+                if (this.sysmapScanner.isUniversalCartographicsLogoVisible(rgb)) {
+                    this.clickOnNextBodyOnSystemMap();
+                    this.shipControl.toggleSystemMap();
+                    this.shipControl.setThrottle(0);
+                    this.gameState = GameState.WAIT_FOR_SHIP_HUD;
+                    logger.debug("Clicked on next body, waiting for ship HUD at 0% throttle");
+                }
+                break;
+            case WAIT_FOR_SHIP_HUD:
+                if (this.isShipHudVisible(orangeHudImage)) {
+                    this.shipControl.setThrottle(25);
+                    this.gameState = GameState.ALIGN_TO_NEXT_BODY;
+                    logger.debug("Ship HUD visible, aligning to next body at 25% throttle");
+                }
+                break;
+            case ALIGN_TO_NEXT_SYSTEM:
+                if (this.shipControl.getThrottle() < 100) {
+                    this.shipControl.setThrottle(100);
+                }
+                if (targetMatch != null) {
+                    if (this.alignToTargetInHud(targetMatch)) {
+                        this.shipControl.toggleFsd();
+                        this.gameState = GameState.FSD_CHARGING;
+                        logger.debug("Next system in sight, charging FSD");
+                    }
+                } else {
+                    if (this.alignToTargetInCompass(compassMatch, compassDotMatch, hollow)) {
+                        this.shipControl.toggleFsd();
+                        this.gameState = GameState.FSD_CHARGING;
+                        logger.debug("Next system in sight, charging FSD");
+                    }
+                }
+                break;
+            case IN_EMERGENCY_EXIT:
+                logger.debug("In emergency exit...");
+                break;
+            default:
+                this.doEmergencyExit("Unknown game state " + this.gameState);
+                break;
+        }
     }
 
     private boolean isShipHudVisible(GrayF32 orangeHudImage) {
