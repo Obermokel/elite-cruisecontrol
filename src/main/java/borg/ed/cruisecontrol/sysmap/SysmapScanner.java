@@ -265,18 +265,21 @@ public class SysmapScanner {
 			Thread.sleep(500);
 			this.robot.mouseMove((leftmostBodyOnScreen.centerOnScreen.x - 5) + random.nextInt(10), (leftmostBodyOnScreen.centerOnScreen.y - 5) + random.nextInt(10));
 			Thread.sleep(500);
+			this.robot.mouseMove((b.centerOnScreen.x - 5) + random.nextInt(10), (b.centerOnScreen.y - 5) + random.nextInt(10));
+			Thread.sleep(500);
 
 			final long start = System.currentTimeMillis();
 
 			while ((System.currentTimeMillis() - start) < 2500L) {
+				Planar<GrayF32> rgb = null;
+				Planar<GrayF32> hsv = null;
 				synchronized (this.screenConverterResult) {
-					this.robot.mouseMove((b.centerOnScreen.x - 5) + random.nextInt(10), (b.centerOnScreen.y - 5) + random.nextInt(10));
-
 					this.screenConverterResult.wait();
-
-					if (this.extractBodyData(this.screenConverterResult.getRgb().clone(), this.screenConverterResult.getHsv().clone(), b)) {
-						break;
-					}
+					rgb = this.screenConverterResult.getRgb().clone();
+					hsv = this.screenConverterResult.getHsv().clone();
+				}
+				if (this.extractBodyData(rgb, hsv, b)) {
+					break;
 				}
 			}
 
@@ -304,13 +307,21 @@ public class SysmapScanner {
 		}
 
 		TemplateMatch mUnexplored = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 420, 0, 1920 - 420, 1080, refUnexplored);
+		logger.debug("Best UNEXPLORED match = " + mUnexplored.getErrorPerPixel());
 		if (mUnexplored.getErrorPerPixel() > 0.05f) {
-			logger.debug("Best UNEXPLORED match = " + mUnexplored.getErrorPerPixel());
 			return false;
 		} else {
 			b.unexplored = true;
 
 			TemplateMatch mArrivalPoint = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, mUnexplored.getX() - 20, mUnexplored.getY() + 20, 170, 55, refArrivalPoint);
+			logger.debug("Best ARRIVAL POINT match = " + mArrivalPoint.getErrorPerPixel());
+			TemplateMatch mSolarMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refSolarMasses);
+			logger.debug("Best SOLAR MASSES match = " + mSolarMasses.getErrorPerPixel());
+			TemplateMatch mMoonMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refMoonMasses);
+			logger.debug("Best MOON MASSES match = " + mMoonMasses.getErrorPerPixel());
+			TemplateMatch mEarthMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refEarthMasses);
+			logger.debug("Best EARTH MASSES match = " + mEarthMasses.getErrorPerPixel());
+
 			if (mArrivalPoint.getErrorPerPixel() <= 0.05f) {
 				int apX0 = Math.min(b.grayDebugImage.width - 1, mArrivalPoint.getX() + mArrivalPoint.getWidth());
 				int apY0 = Math.max(0, mArrivalPoint.getY() - 5);
@@ -331,8 +342,7 @@ public class SysmapScanner {
 				}
 			}
 
-			TemplateMatch mSolarMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refSolarMasses);
-			if (mSolarMasses.getErrorPerPixel() <= 0.05f) {
+			if (mSolarMasses.getErrorPerPixel() < mMoonMasses.getErrorPerPixel() && mSolarMasses.getErrorPerPixel() < mEarthMasses.getErrorPerPixel()) {
 				int emX0 = Math.min(b.grayDebugImage.width - 1, mSolarMasses.getX() + mSolarMasses.getWidth());
 				int emY0 = Math.max(0, mSolarMasses.getY() - 5);
 				int emX1 = Math.min(b.grayDebugImage.width - 1, emX0 + 250);
@@ -352,8 +362,7 @@ public class SysmapScanner {
 				}
 			}
 
-			TemplateMatch mMoonMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refMoonMasses);
-			if (mMoonMasses.getErrorPerPixel() <= 0.05f) {
+			if (mMoonMasses.getErrorPerPixel() < mSolarMasses.getErrorPerPixel() && mMoonMasses.getErrorPerPixel() < mEarthMasses.getErrorPerPixel()) {
 				int emX0 = Math.min(b.grayDebugImage.width - 1, mMoonMasses.getX() + mMoonMasses.getWidth());
 				int emY0 = Math.max(0, mMoonMasses.getY() - 5);
 				int emX1 = Math.min(b.grayDebugImage.width - 1, emX0 + 250);
@@ -373,8 +382,7 @@ public class SysmapScanner {
 				}
 			}
 
-			TemplateMatch mEarthMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refEarthMasses);
-			if (mEarthMasses.getErrorPerPixel() <= 0.05f) {
+			if (mEarthMasses.getErrorPerPixel() < mSolarMasses.getErrorPerPixel() && mEarthMasses.getErrorPerPixel() < mMoonMasses.getErrorPerPixel()) {
 				int emX0 = Math.min(b.grayDebugImage.width - 1, mEarthMasses.getX() + mEarthMasses.getWidth());
 				int emY0 = Math.max(0, mEarthMasses.getY() - 5);
 				int emX1 = Math.min(b.grayDebugImage.width - 1, emX0 + 250);
@@ -394,6 +402,7 @@ public class SysmapScanner {
 				}
 
 				TemplateMatch mRadius = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, mEarthMasses.getX() - 2, mEarthMasses.getY() + 20, 170, 40, refRadius);
+				logger.debug("Best RADIUS match = " + mRadius.getErrorPerPixel());
 				if (mRadius.getErrorPerPixel() <= 0.05f) {
 					int radX0 = Math.min(b.grayDebugImage.width - 1, mRadius.getX() + mRadius.getWidth());
 					int radY0 = Math.max(0, mRadius.getY() - 5);
@@ -531,8 +540,12 @@ public class SysmapScanner {
 						if (b.distanceLs != null) {
 							g.drawString(String.format(Locale.US, "distanceLs=%,.2f", b.distanceLs), b.areaInImage.x, b.areaInImage.y + 15);
 						}
-						if (b.earthMasses != null) {
-							g.drawString(String.format(Locale.US, "earthMasses=%,.3f", b.earthMasses), b.areaInImage.x, b.areaInImage.y + 30);
+						if (b.solarMasses != null) {
+							g.drawString(String.format(Locale.US, "solarMasses=%,.4f", b.solarMasses), b.areaInImage.x, b.areaInImage.y + 30);
+						} else if (b.moonMasses != null) {
+							g.drawString(String.format(Locale.US, "moonMasses=%,.4f", b.moonMasses), b.areaInImage.x, b.areaInImage.y + 30);
+						} else if (b.earthMasses != null) {
+							g.drawString(String.format(Locale.US, "earthMasses=%,.4f", b.earthMasses), b.areaInImage.x, b.areaInImage.y + 30);
 						}
 						if (b.radiusKm != null) {
 							g.drawString(String.format(Locale.US, "radiusKm=%,.0f", b.radiusKm), b.areaInImage.x, b.areaInImage.y + 45);

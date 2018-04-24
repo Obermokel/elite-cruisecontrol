@@ -902,7 +902,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 		long millis = System.currentTimeMillis() - this.lastTick;
 		double fps = 1000.0 / Math.max(1, millis);
-		g.setColor(Color.YELLOW);
+		g.setColor(Color.GREEN);
 		g.setFont(new Font("Sans Serif", Font.BOLD, 20));
 		g.drawString(String.format(Locale.US, "%.2f FPS / %s", fps, this.gameState), 10, 30);
 		g.drawString(String.format(Locale.US, "x=%d%% / y=%d%%", this.xPercent, this.yPercent), 10, 60);
@@ -1065,7 +1065,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				if (StringUtils.isEmpty(scannedBodyType)) {
 					scannedBodyType = ((ScanEvent) event).getStarType();
 				}
-				String guessedBodyType = this.currentSysmapBody.bestBodyMatch.getTemplate().getName();
+				String guessedBodyType = this.currentSysmapBody.bestBodyMatch == null ? null : this.currentSysmapBody.bestBodyMatch.getTemplate().getName();
 				if (StringUtils.isNotEmpty(scannedBodyType) && !scannedBodyType.equals(guessedBodyType)) {
 					logger.warn("Wrongly guessed " + guessedBodyType + ", but was " + scannedBodyType);
 					try {
