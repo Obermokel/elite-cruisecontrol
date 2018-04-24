@@ -11,6 +11,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -490,6 +491,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                         }
                         break;
                     case IN_EMERGENCY_EXIT:
+                        logger.debug("In emergency exit...");
                         break;
                     default:
                         this.doEmergencyExit("Unknown game state " + this.gameState);
@@ -974,7 +976,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     @Override
     public void onNewJournalEntry(AbstractJournalEvent event) {
         if (event instanceof MusicEvent) {
-            if (MusicEvent.TRACK_DESTINATION_FROM_HYPERSPACE.equals(((MusicEvent) event).getMusicTrack())) {
+            if (MusicEvent.TRACK_DESTINATION_FROM_HYPERSPACE.equals(((MusicEvent) event).getMusicTrack()) && event.getTimestamp().isAfter(ZonedDateTime.now().minusMinutes(1))) {
                 this.doEmergencyExit("End of plotted route");
             }
         } else if (event instanceof StartJumpEvent) {
