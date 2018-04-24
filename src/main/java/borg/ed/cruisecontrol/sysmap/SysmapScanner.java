@@ -59,6 +59,8 @@ public class SysmapScanner {
     private TemplateRgb refUcLogo = null;
     private Template refUnexplored = null;
     private Template refArrivalPoint = null;
+    private Template refSolarMasses = null;
+    private Template refMoonMasses = null;
     private Template refEarthMasses = null;
     private Template refRadius = null;
     private List<Template> textTemplates = null;
@@ -296,6 +298,48 @@ public class SysmapScanner {
                 }
             }
 
+            TemplateMatch mSolarMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refSolarMasses);
+            if (mSolarMasses.getErrorPerPixel() <= 0.025f) {
+                int emX0 = Math.min(b.grayDebugImage.width - 1, mSolarMasses.getX() + mSolarMasses.getWidth());
+                int emY0 = Math.max(0, mSolarMasses.getY() - 5);
+                int emX1 = Math.min(b.grayDebugImage.width - 1, emX0 + 250);
+                int emY1 = Math.min(b.grayDebugImage.height - 1, emY0 + 30);
+                String solarMassesText = this.scanText(b.grayDebugImage.subimage(emX0, emY0, emX1, emY1), textTemplates);
+                logger.debug("...solarMassesText='" + solarMassesText + "'");
+                Pattern p = Pattern.compile(".*?((\\d{1,3})([\\.,]\\d{3})*([\\.,]\\d{3})).*?");
+                Matcher m = p.matcher(solarMassesText);
+                if (m.matches()) {
+                    StringBuilder sb = new StringBuilder(m.group(1).replaceAll("\\D", ""));
+                    sb.insert(sb.length() - 3, ".");
+                    try {
+                        b.solarMasses = new BigDecimal(sb.toString());
+                    } catch (NumberFormatException e) {
+                        logger.error("Failed to parse '" + sb + "' (derived from the original '" + m.group(1) + "') to a BigDecimal");
+                    }
+                }
+            }
+
+            TemplateMatch mMoonMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refMoonMasses);
+            if (mMoonMasses.getErrorPerPixel() <= 0.025f) {
+                int emX0 = Math.min(b.grayDebugImage.width - 1, mMoonMasses.getX() + mMoonMasses.getWidth());
+                int emY0 = Math.max(0, mMoonMasses.getY() - 5);
+                int emX1 = Math.min(b.grayDebugImage.width - 1, emX0 + 250);
+                int emY1 = Math.min(b.grayDebugImage.height - 1, emY0 + 30);
+                String moonMassesText = this.scanText(b.grayDebugImage.subimage(emX0, emY0, emX1, emY1), textTemplates);
+                logger.debug("...moonMassesText='" + moonMassesText + "'");
+                Pattern p = Pattern.compile(".*?((\\d{1,3})([\\.,]\\d{3})*([\\.,]\\d{3})).*?");
+                Matcher m = p.matcher(moonMassesText);
+                if (m.matches()) {
+                    StringBuilder sb = new StringBuilder(m.group(1).replaceAll("\\D", ""));
+                    sb.insert(sb.length() - 3, ".");
+                    try {
+                        b.moonMasses = new BigDecimal(sb.toString());
+                    } catch (NumberFormatException e) {
+                        logger.error("Failed to parse '" + sb + "' (derived from the original '" + m.group(1) + "') to a BigDecimal");
+                    }
+                }
+            }
+
             TemplateMatch mEarthMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refEarthMasses);
             if (mEarthMasses.getErrorPerPixel() <= 0.025f) {
                 int emX0 = Math.min(b.grayDebugImage.width - 1, mEarthMasses.getX() + mEarthMasses.getWidth());
@@ -390,6 +434,8 @@ public class SysmapScanner {
             this.refUcLogo = TemplateRgb.fromFile(new File(refDir, "uc_logo.png"));
             this.refUnexplored = Template.fromFile(new File(refDir, "unexplored.png"));
             this.refArrivalPoint = Template.fromFile(new File(refDir, "arrival_point.png"));
+            this.refSolarMasses = Template.fromFile(new File(refDir, "solar_masses.png"));
+            this.refMoonMasses = Template.fromFile(new File(refDir, "moon_masses.png"));
             this.refEarthMasses = Template.fromFile(new File(refDir, "earth_masses.png"));
             this.refRadius = Template.fromFile(new File(refDir, "radius.png"));
             this.textTemplates = Template.fromFolder(new File(refDir, "sysmapText"));

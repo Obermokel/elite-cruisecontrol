@@ -1139,7 +1139,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     }
 
     private SysmapBody nextBodyToScan() {
-        return this.sysmapScannerResult.getBodies().stream().filter(b -> b.unexplored && (b.distanceLs == null || b.distanceLs.floatValue() <= 12345f))
+        final boolean alreadyScannedStar = this.currentSystemScannedBodies.stream().filter(e -> StringUtils.isNotEmpty(e.getStarType())).findFirst().isPresent();
+        return this.sysmapScannerResult.getBodies().stream().filter( //
+                b -> b.unexplored && // Of course only unexplored
+                b.moonMasses == null && // No belts please
+                (alreadyScannedStar ? b.solarMasses == null : true) && // No further stars if already scanned one
+                ((b.distanceLs != null && b.distanceLs.floatValue() <= 12345f) || (b.solarMasses != null))) // Only close distance (or stars)
                 .sorted(new SensibleScanOrderComparator()).findFirst().orElse(null);
     }
 

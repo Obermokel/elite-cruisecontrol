@@ -19,6 +19,8 @@ public class SysmapBody {
     public boolean unexplored = false;
     public TemplateMatchRgb bestBodyMatch = null;
     public BigDecimal distanceLs = null;
+    public BigDecimal solarMasses = null;
+    public BigDecimal moonMasses = null;
     public BigDecimal earthMasses = null;
     public BigDecimal radiusKm = null;
     public Planar<GrayF32> rgbDebugImage = null;
@@ -113,6 +115,8 @@ public class SysmapBody {
         sb.append("area=").append(this.areaInImage.x).append(",").append(this.areaInImage.y).append(" ").append(this.areaInImage.width).append("x").append(this.areaInImage.height);
         sb.append("; ").append("unexplored=").append(this.unexplored);
         sb.append("; ").append("distanceLs=").append(this.distanceLs);
+        sb.append("; ").append("solarMasses=").append(this.solarMasses);
+        sb.append("; ").append("moonMasses=").append(this.moonMasses);
         sb.append("; ").append("earthMasses=").append(this.earthMasses);
         sb.append("; ").append("radiusKm=").append(this.radiusKm);
         sb.append("]");
