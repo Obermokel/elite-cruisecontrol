@@ -1,5 +1,6 @@
 package borg.ed.cruisecontrol.sysmap;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Point;
@@ -25,17 +26,22 @@ import java.util.stream.Collectors;
 
 import javax.imageio.ImageIO;
 
+import org.ddogleg.struct.FastQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import boofcv.alg.color.ColorHsv;
 import boofcv.alg.filter.basic.GrayImageOps;
 import boofcv.alg.filter.binary.BinaryImageOps;
 import boofcv.alg.filter.binary.Contour;
 import boofcv.alg.filter.binary.ThresholdImageOps;
 import boofcv.alg.filter.blur.GBlurImageOps;
-import boofcv.alg.misc.ImageMiscOps;
+import boofcv.alg.shapes.ellipse.BinaryEllipseDetector;
 import boofcv.core.image.ConvertImage;
+import boofcv.factory.shape.ConfigEllipseDetector;
+import boofcv.factory.shape.FactoryShapeDetector;
 import boofcv.gui.binary.VisualizeBinaryData;
+import boofcv.gui.feature.VisualizeShapes;
 import boofcv.io.image.ConvertBufferedImage;
 import boofcv.struct.ConnectRule;
 import boofcv.struct.image.GrayF32;
@@ -51,6 +57,7 @@ import borg.ed.cruisecontrol.templatematching.TemplateRgb;
 import borg.ed.cruisecontrol.util.ImageUtil;
 import borg.ed.cruisecontrol.util.MouseUtil;
 import georegression.struct.point.Point2D_I32;
+import georegression.struct.shapes.EllipseRotated_F64;
 
 public class SysmapScanner {
 
@@ -114,56 +121,190 @@ public class SysmapScanner {
 				}
 			}
 
+			final File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
+			final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
+
 			logger.debug("Start scanning system map");
 			long scanStart = System.currentTimeMillis();
+
+			// Convert to gray
+			GrayF32 gray = ConvertImage.average(rgb, null);
 			try {
-				ImageIO.write(ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true), "PNG", new File(System.getProperty("user.home"), systemName + ".png"));
+				BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(gray), null);
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 000_gray " + systemName + ".png"));
 			} catch (IOException e1) {
-				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+
+			GrayU8 binary = new GrayU8(gray.width, gray.height);
+			ThresholdImageOps.threshold(gray, binary, 0.50f, false);
+			try {
+				BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 010_binary " + systemName + ".png"));
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+
+			binary = BinaryImageOps.erode8(binary, 2, null);
+			try {
+				BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 020_eroded " + systemName + ".png"));
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+
+			binary = BinaryImageOps.dilate4(binary, 2, null);
+			try {
+				BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 030_dilated " + systemName + ".png"));
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+
+			ConfigEllipseDetector config = new ConfigEllipseDetector();
+			config.maxDistanceFromEllipse = 20.0;
+			BinaryEllipseDetector<GrayU8> detector = FactoryShapeDetector.ellipse(config, GrayU8.class);
+			detector.process(ImageUtil.denormalize255(binary), binary);
+			FastQueue<EllipseRotated_F64> ellipses = detector.getFoundEllipses();
+			logger.debug("Found " + ellipses.size + " ellipse(s) in " + detector.getAllContours().size() + " contour(s)");
+
+			// Keep only big and circle ones
+			List<EllipseRotated_F64> bigCircles = new ArrayList<>();
+			for (int i = 0; i < ellipses.size; i++) {
+				EllipseRotated_F64 e = ellipses.get(i);
+				if (e.a > 50 && e.a / e.b < 1.1) {
+					bigCircles.add(new EllipseRotated_F64(e));
+				}
+			}
+			logger.debug("Kept " + bigCircles.size() + " big circle(s) of " + ellipses.size + " total ellipse(s)");
+
+			try {
+				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
+				Graphics2D g2 = debugImage.createGraphics();
+				g2.setStroke(new BasicStroke(3));
+				g2.setColor(Color.GREEN);
+				for (EllipseRotated_F64 bc : bigCircles) {
+					VisualizeShapes.drawEllipse(bc, g2);
+					g2.drawString(String.format(Locale.US, "%.6f", bc.a / bc.b), (int) bc.center.x, (int) bc.center.y);
+				}
+				g2.dispose();
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 098_circles " + systemName + ".png"));
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+
+			// Overwrite the found ones with black
+			BufferedImage tmpBI = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
+			Graphics2D tmpG = tmpBI.createGraphics();
+			tmpG.setColor(Color.BLACK);
+			tmpG.fillRect(0, 0, 420, 1080);
+			for (EllipseRotated_F64 c : bigCircles) {
+				tmpG.fillOval((int) (c.center.x - c.a) - 25, (int) (c.center.y - c.a) - 25, (int) (2 * c.a) + 50, (int) (2 * c.a) + 50);
+			}
+			tmpG.dispose();
+			Planar<GrayF32> overwrittenRgb = ImageUtil.normalize255(ConvertBufferedImage.convertFromMulti(tmpBI, null, true, GrayF32.class));
+			try {
+				ImageIO.write(tmpBI, "PNG", new File(debugFolder, "DEBUG " + ts + " 099_overwrittenRgb " + systemName + ".png"));
+			} catch (IOException e1) {
 				e1.printStackTrace();
 			}
 
 			// Convert to gray
-			GrayF32 gray = ConvertImage.average(rgb, null);
-
-			// Overwrite left panel with black
-			ImageMiscOps.fillRectangle(gray, 0f, 0, 0, 420, 1080);
-
-			// Remove coronas
-			for (int y = 0; y < hsv.height; y++) {
-				for (int x = 420; x < hsv.width; x++) {
-					float h = hsv.bands[0].unsafe_get(x, y);
-					float s = hsv.bands[1].unsafe_get(x, y);
-					float v = hsv.bands[2].unsafe_get(x, y);
-
-					// Red-orange
-					if (s >= 0.75f) {
-						if (h > 0.15f && h < 0.45f) {
-							if (v < 0.75f) {
-								gray.unsafe_set(x, y, 0f);
-							}
-						}
-					}
-
-					//					// Yellow
-					//					if (h > 0.33f && h < 0.8f) {
-					//						if (v < 0.9f) {
-					//							gray.unsafe_set(x, y, 0f);
-					//						}
-					//					}
-				}
+			GrayF32 overwrittenGray = ConvertImage.average(overwrittenRgb, null);
+			try {
+				BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(overwrittenGray), null);
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 100_overwrittenGray " + systemName + ".png"));
+			} catch (IOException e1) {
+				e1.printStackTrace();
 			}
 
-			// Enhance contrast
-			gray = GrayImageOps.brighten(gray, -0.1f, 1.0f, null);
-			gray = GrayImageOps.stretch(gray, 100.0f, 0.0f, 1.0f, null);
-			logger.debug("Converted to gray and enhanced contrast");
+			// Remove cyan arcs of landable planets
+			GrayF32 noArcsGray = overwrittenGray.clone();
+			Planar<GrayF32> overwrittenHsv = overwrittenRgb.createSameShape();
+			ColorHsv.rgbToHsv_F32(overwrittenRgb, overwrittenHsv);
+			for (int y = 0; y < overwrittenHsv.height; y++) {
+				for (int x = 420; x < overwrittenHsv.width; x++) {
+					float h = overwrittenHsv.bands[0].unsafe_get(x, y);
+					float s = overwrittenHsv.bands[1].unsafe_get(x, y);
+					float v = overwrittenHsv.bands[2].unsafe_get(x, y);
+
+					if (s >= 0.75f) {
+						if (h >= Math.toRadians(190) && h <= Math.toRadians(200)) {
+							noArcsGray.unsafe_set(x, y, 0);
+						}
+					}
+				}
+			}
+			try {
+				BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(noArcsGray), null);
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 110_noArcsGray " + systemName + ".png"));
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+
+			// Amplify
+			GrayF32 amplified = GrayImageOps.brighten(noArcsGray, -0.04f, 1.0f, null);
+			amplified = GrayImageOps.stretch(amplified, 10000.0f, 0.0f, 1.0f, null);
+			try {
+				BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(amplified), null);
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 120_amplified " + systemName + ".png"));
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+
+			// Blur
+			GrayF32 blurred = GBlurImageOps.gaussian(amplified, null, -1, 13, null);
+			try {
+				BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(blurred), null);
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 130_blurred " + systemName + ".png"));
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+
+			// Threshold
+			GrayU8 thresholded = new GrayU8(blurred.width, blurred.height);
+			ThresholdImageOps.threshold(blurred, thresholded, 0.5f, false);
+			try {
+				BufferedImage debugImage = VisualizeBinaryData.renderBinary(thresholded, false, null);
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 140_thresholded " + systemName + ".png"));
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+
+			detector.process(ImageUtil.denormalize255(thresholded), thresholded);
+			ellipses = detector.getFoundEllipses();
+			logger.debug("Found " + ellipses.size + " ellipse(s) in " + detector.getAllContours().size() + " contour(s)");
+
+			// Keep only big and circle ones
+			List<EllipseRotated_F64> smallEllipses = new ArrayList<>();
+			for (int i = 0; i < ellipses.size; i++) {
+				EllipseRotated_F64 e = ellipses.get(i);
+				if (e.a >= 5 && e.b >= 5 && e.a / e.b < 3) {
+					smallEllipses.add(new EllipseRotated_F64(e));
+				}
+			}
+			logger.debug("Kept " + smallEllipses.size() + " small ellipse(s) of " + ellipses.size + " total ellipse(s)");
+
+			try {
+				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
+				Graphics2D g2 = debugImage.createGraphics();
+				g2.setStroke(new BasicStroke(3));
+				g2.setColor(Color.GREEN);
+				for (EllipseRotated_F64 bc : bigCircles) {
+					VisualizeShapes.drawEllipse(bc, g2);
+					g2.drawString(String.format(Locale.US, "%.1f / %.1f = %.6f", bc.a, bc.b, bc.a / bc.b), (int) bc.center.x, (int) bc.center.y);
+				}
+				for (EllipseRotated_F64 se : smallEllipses) {
+					VisualizeShapes.drawEllipse(se, g2);
+					g2.drawString(String.format(Locale.US, "%.1f", se.a / se.b), (int) se.center.x, (int) se.center.y);
+				}
+				g2.dispose();
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 198_bodies " + systemName + ".png"));
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
 
 			// Detect contours
-			GrayU8 binary = new GrayU8(gray.width, gray.height);
-			ThresholdImageOps.threshold(gray, binary, 0.40f, false);
-			binary = BinaryImageOps.erode8(binary, 2, null);
-			binary = BinaryImageOps.dilate4(binary, 2, null);
 			List<Contour> contours = BinaryImageOps.contour(binary, ConnectRule.EIGHT, null);
 			logger.debug("Contours found: " + contours.size());
 

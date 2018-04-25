@@ -7,6 +7,7 @@ import java.awt.Transparency;
 import java.awt.image.BufferedImage;
 
 import boofcv.struct.image.GrayF32;
+import boofcv.struct.image.GrayU8;
 import boofcv.struct.image.Planar;
 
 public abstract class ImageUtil {
@@ -103,6 +104,16 @@ public abstract class ImageUtil {
 			normalized.setBand(band, normalizedBand);
 		}
 		return normalized;
+	}
+
+	public static GrayU8 denormalize255(GrayU8 original) {
+		GrayU8 denormalized = original.createSameShape();
+		for (int y = 0; y < original.height; y++) {
+			for (int x = 0; x < original.width; x++) {
+				denormalized.unsafe_set(x, y, original.unsafe_get(x, y) * 255);
+			}
+		}
+		return denormalized;
 	}
 
 	public static GrayF32 denormalize255(GrayF32 original) {
