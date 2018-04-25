@@ -541,11 +541,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						if (t instanceof JournalReaderThread) {
 							((JournalReaderThread) t).shutdown = true;
 						} else if (t instanceof StatusReaderThread) {
-							((JournalReaderThread) t).shutdown = true;
+							((StatusReaderThread) t).shutdown = true;
 						} else if (t instanceof ScreenConverterThread) {
-							((JournalReaderThread) t).shutdown = true;
+							((ScreenConverterThread) t).shutdown = true;
 						} else if (t instanceof ScreenReaderThread) {
-							((JournalReaderThread) t).shutdown = true;
+							((ScreenReaderThread) t).shutdown = true;
 						}
 					}
 

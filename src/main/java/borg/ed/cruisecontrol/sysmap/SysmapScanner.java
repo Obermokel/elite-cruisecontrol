@@ -129,19 +129,28 @@ public class SysmapScanner {
 			// Overwrite left panel with black
 			ImageMiscOps.fillRectangle(gray, 0f, 0, 0, 420, 1080);
 
-			// Remove red-orange coronas
+			// Remove coronas
 			for (int y = 0; y < hsv.height; y++) {
 				for (int x = 420; x < hsv.width; x++) {
+					float h = hsv.bands[0].unsafe_get(x, y);
 					float s = hsv.bands[1].unsafe_get(x, y);
+					float v = hsv.bands[2].unsafe_get(x, y);
+
+					// Red-orange
 					if (s >= 0.75f) {
-						float h = hsv.bands[0].unsafe_get(x, y);
 						if (h > 0.15f && h < 0.45f) {
-							float v = hsv.bands[2].unsafe_get(x, y);
 							if (v < 0.75f) {
 								gray.unsafe_set(x, y, 0f);
 							}
 						}
 					}
+
+					//					// Yellow
+					//					if (h > 0.33f && h < 0.8f) {
+					//						if (v < 0.9f) {
+					//							gray.unsafe_set(x, y, 0f);
+					//						}
+					//					}
 				}
 			}
 
@@ -342,7 +351,8 @@ public class SysmapScanner {
 				}
 			}
 
-			if (mSolarMasses.getErrorPerPixel() < mMoonMasses.getErrorPerPixel() && mSolarMasses.getErrorPerPixel() < mEarthMasses.getErrorPerPixel()) {
+			if (mSolarMasses.getErrorPerPixel() <= 0.05f && mSolarMasses.getErrorPerPixel() < mMoonMasses.getErrorPerPixel()
+					&& mSolarMasses.getErrorPerPixel() < mEarthMasses.getErrorPerPixel()) {
 				int emX0 = Math.min(b.grayDebugImage.width - 1, mSolarMasses.getX() + mSolarMasses.getWidth());
 				int emY0 = Math.max(0, mSolarMasses.getY() - 5);
 				int emX1 = Math.min(b.grayDebugImage.width - 1, emX0 + 250);
@@ -362,7 +372,8 @@ public class SysmapScanner {
 				}
 			}
 
-			if (mMoonMasses.getErrorPerPixel() < mSolarMasses.getErrorPerPixel() && mMoonMasses.getErrorPerPixel() < mEarthMasses.getErrorPerPixel()) {
+			if (mMoonMasses.getErrorPerPixel() <= 0.05f && mMoonMasses.getErrorPerPixel() < mSolarMasses.getErrorPerPixel()
+					&& mMoonMasses.getErrorPerPixel() < mEarthMasses.getErrorPerPixel()) {
 				int emX0 = Math.min(b.grayDebugImage.width - 1, mMoonMasses.getX() + mMoonMasses.getWidth());
 				int emY0 = Math.max(0, mMoonMasses.getY() - 5);
 				int emX1 = Math.min(b.grayDebugImage.width - 1, emX0 + 250);
@@ -382,7 +393,8 @@ public class SysmapScanner {
 				}
 			}
 
-			if (mEarthMasses.getErrorPerPixel() < mSolarMasses.getErrorPerPixel() && mEarthMasses.getErrorPerPixel() < mMoonMasses.getErrorPerPixel()) {
+			if (mEarthMasses.getErrorPerPixel() <= 0.05f && mEarthMasses.getErrorPerPixel() < mSolarMasses.getErrorPerPixel()
+					&& mEarthMasses.getErrorPerPixel() < mMoonMasses.getErrorPerPixel()) {
 				int emX0 = Math.min(b.grayDebugImage.width - 1, mEarthMasses.getX() + mEarthMasses.getWidth());
 				int emY0 = Math.max(0, mEarthMasses.getY() - 5);
 				int emX1 = Math.min(b.grayDebugImage.width - 1, emX0 + 250);
