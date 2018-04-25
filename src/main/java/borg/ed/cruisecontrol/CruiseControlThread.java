@@ -1061,27 +1061,31 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				this.shipControl.stopTurning();
 				this.currentSysmapBody.unexplored = false;
 				this.currentSystemScannedBodies.add((ScanEvent) event);
-				String scannedBodyType = ((ScanEvent) event).getPlanetClass();
-				if (StringUtils.isEmpty(scannedBodyType)) {
-					scannedBodyType = ((ScanEvent) event).getStarType();
-				}
-				String guessedBodyType = this.currentSysmapBody.bestBodyMatch == null ? null : this.currentSysmapBody.bestBodyMatch.getTemplate().getName();
-				if (StringUtils.isNotEmpty(scannedBodyType) && !scannedBodyType.equals(guessedBodyType)) {
-					logger.warn("Wrongly guessed " + guessedBodyType + ", but was " + scannedBodyType);
-					try {
-						BufferedImage planetImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(this.currentSysmapBody.bestBodyMatch.getImage()), null, true);
-						File refFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/sysmapBodies/" + scannedBodyType);
-						if (!refFolder.exists()) {
-							refFolder.mkdirs();
-						}
-						final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
-						ImageIO.write(planetImage, "PNG", new File(refFolder, scannedBodyType + " " + ts + " " + this.currentSystemName + ".png"));
-						this.sysmapScanner.reloadTemplates();
-					} catch (IOException e) {
-						logger.warn("Failed to write planet ref image", e);
+
+				// Learn
+				if (this.currentSysmapBody.bestBodyMatch != null) {
+					String scannedBodyType = ((ScanEvent) event).getPlanetClass();
+					if (StringUtils.isEmpty(scannedBodyType)) {
+						scannedBodyType = ((ScanEvent) event).getStarType();
 					}
-				} else {
-					logger.info("Correctly guessed " + guessedBodyType + ", and was " + scannedBodyType);
+					String guessedBodyType = this.currentSysmapBody.bestBodyMatch.getTemplate().getName();
+					if (StringUtils.isNotEmpty(scannedBodyType) && !scannedBodyType.equals(guessedBodyType)) {
+						logger.warn("Wrongly guessed " + guessedBodyType + ", but was " + scannedBodyType);
+						try {
+							BufferedImage planetImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(this.currentSysmapBody.bestBodyMatch.getImage()), null, true);
+							File refFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/sysmapBodies/" + scannedBodyType);
+							if (!refFolder.exists()) {
+								refFolder.mkdirs();
+							}
+							final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
+							ImageIO.write(planetImage, "PNG", new File(refFolder, scannedBodyType + " " + ts + " " + this.currentSystemName + ".png"));
+							this.sysmapScanner.reloadTemplates();
+						} catch (IOException e) {
+							logger.warn("Failed to write planet ref image", e);
+						}
+					} else {
+						logger.info("Correctly guessed " + guessedBodyType + ", and was " + scannedBodyType);
+					}
 				}
 
 				this.currentSysmapBody = null;

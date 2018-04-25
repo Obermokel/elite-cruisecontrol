@@ -259,7 +259,7 @@ public class SysmapScanner {
 
 		SysmapBody lastBody = null;
 		for (SysmapBody b : bodies) {
-			logger.debug("Extracting data for " + b + ", centerOnScreen = " + b.centerOnScreen.x + "," + b.centerOnScreen.y);
+			logger.debug("Extracting data for body" + bodies.indexOf(b));
 
 			this.robot.mouseMove((rightmostBodyOnScreen.centerOnScreen.x - 5) + random.nextInt(10), (rightmostBodyOnScreen.centerOnScreen.y - 5) + random.nextInt(10));
 			Thread.sleep(500);
@@ -329,7 +329,7 @@ public class SysmapScanner {
 				int apY1 = Math.min(b.grayDebugImage.height - 1, apY0 + 30);
 				String arrivalPointText = this.scanText(b.grayDebugImage.subimage(apX0, apY0, apX1, apY1), textTemplates);
 				logger.debug("...arrivalPointText='" + arrivalPointText + "'");
-				Pattern p = Pattern.compile(".*?(\\d+.*\\d+LS).*?");
+				Pattern p = Pattern.compile(".*?(\\d+.*\\d+.*LS).*?");
 				Matcher m = p.matcher(arrivalPointText);
 				if (m.matches()) {
 					StringBuilder sb = new StringBuilder(m.group(1).replaceAll("\\D", ""));
@@ -410,7 +410,7 @@ public class SysmapScanner {
 					int radY1 = Math.min(b.grayDebugImage.height - 1, radY0 + 30);
 					String radiusText = this.scanText(b.grayDebugImage.subimage(radX0, radY0, radX1, radY1), textTemplates);
 					logger.debug("...radiusText='" + radiusText + "'");
-					p = Pattern.compile(".*?(\\d+.*\\d+KM).*?");
+					p = Pattern.compile(".*?(\\d+.*\\d+.*KM).*?");
 					m = p.matcher(radiusText);
 					if (m.matches()) {
 						StringBuilder sb = new StringBuilder(m.group(1).replaceAll("\\D", ""));
@@ -503,10 +503,15 @@ public class SysmapScanner {
 					g.setColor(Color.GREEN);
 					for (SysmapBody b : bodies) {
 						g.drawRect(b.areaInImage.x, b.areaInImage.y, b.areaInImage.width, b.areaInImage.height);
-						if (b.bestBodyMatch == null) {
-							g.drawString("???", b.areaInImage.x, b.areaInImage.y);
+						if (b.distanceLs == null) {
+							g.drawString("?.?? Ls", b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 15);
 						} else {
-							g.drawString(String.format(Locale.US, "%.6f", b.bestBodyMatch.getErrorPerPixel()), b.areaInImage.x, b.areaInImage.y);
+							g.drawString(String.format(Locale.US, "%.2f Ls", b.distanceLs), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 15);
+						}
+						if (b.bestBodyMatch == null) {
+							g.drawString("???", b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 30);
+						} else {
+							g.drawString(SysmapBody.getAbbreviatedType(b), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 30);
 						}
 					}
 					g.dispose();
