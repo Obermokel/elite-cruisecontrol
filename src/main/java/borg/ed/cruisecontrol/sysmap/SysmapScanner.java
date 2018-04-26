@@ -131,41 +131,43 @@ public class SysmapScanner {
 
             // Convert to gray
             GrayF32 gray = ConvertImage.average(rgb, null);
-            try {
-                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(gray), null);
-                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 000_gray " + systemName + ".png"));
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
+            //            try {
+            //                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(gray), null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 000_gray " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
 
             GrayU8 binary = new GrayU8(gray.width, gray.height);
             ThresholdImageOps.threshold(gray, binary, 0.50f, false);
-            try {
-                BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
-                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 010_binary " + systemName + ".png"));
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
+            //            try {
+            //                BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 010_binary " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
 
             binary = BinaryImageOps.erode8(binary, 2, null);
-            try {
-                BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
-                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 020_eroded " + systemName + ".png"));
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
+            //            try {
+            //                BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 020_eroded " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
 
             binary = BinaryImageOps.dilate4(binary, 2, null);
-            try {
-                BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
-                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 030_dilated " + systemName + ".png"));
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
+            //            try {
+            //                BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 030_dilated " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
 
             ConfigEllipseDetector config = new ConfigEllipseDetector();
-            config.maxDistanceFromEllipse = 20.0;
-            //config.checkRadialDistance = 20.0;
+            //config.minimumContour = 10;
+            config.maxDistanceFromEllipse = 999.0;
+            config.minimumEdgeIntensity = 0;
+            //config.checkRadialDistance = 1.5;
             BinaryEllipseDetector<GrayU8> detector = FactoryShapeDetector.ellipse(config, GrayU8.class);
             detector.process(ImageUtil.denormalize255(binary), binary);
             FastQueue<EllipseRotated_F64> ellipses = detector.getFoundEllipses();
@@ -177,7 +179,16 @@ public class SysmapScanner {
                 EllipseRotated_F64 e = ellipses.get(i);
                 if (e.a > 50 && e.a / e.b < 1.1) {
                     bigCircles.add(new EllipseRotated_F64(e));
-                    rects.add(new Rectangle((int) (e.center.x - e.b), (int) (e.center.y - e.b), (int) (2 * e.b), (int) (2 * e.b)));
+                    int x = Math.max(0, (int) (e.center.x - e.b));
+                    int y = Math.max(0, (int) (e.center.y - e.b));
+                    int s = (int) (2 * e.b);
+                    if (x + s > rgb.width) {
+                        s = rgb.width - x;
+                    }
+                    if (y + s > rgb.height) {
+                        s = rgb.height - y;
+                    }
+                    rects.add(new Rectangle(x, y, s, s));
                 }
             }
             logger.debug("Kept " + bigCircles.size() + " big circle(s) of " + ellipses.size + " total ellipse(s)");
@@ -192,12 +203,13 @@ public class SysmapScanner {
                     g2.drawString(String.format(Locale.US, "%.6f", bc.a / bc.b), (int) bc.center.x, (int) bc.center.y);
                 }
                 g2.dispose();
-                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 098_circles " + systemName + ".png"));
+                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 098_bigCircles " + systemName + ".png"));
             } catch (IOException e1) {
                 e1.printStackTrace();
             }
 
             // Overwrite the found ones with black
+            // TODO alpha
             BufferedImage tmpBI = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
             Graphics2D tmpG = tmpBI.createGraphics();
             tmpG.setColor(Color.BLACK);
@@ -207,20 +219,20 @@ public class SysmapScanner {
             }
             tmpG.dispose();
             Planar<GrayF32> overwrittenRgb = ImageUtil.normalize255(ConvertBufferedImage.convertFromMulti(tmpBI, null, true, GrayF32.class));
-            try {
-                ImageIO.write(tmpBI, "PNG", new File(debugFolder, "DEBUG " + ts + " 099_overwrittenRgb " + systemName + ".png"));
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
+            //            try {
+            //                ImageIO.write(tmpBI, "PNG", new File(debugFolder, "DEBUG " + ts + " 099_overwrittenRgb " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
 
             // Convert to gray
             GrayF32 overwrittenGray = ConvertImage.average(overwrittenRgb, null);
-            try {
-                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(overwrittenGray), null);
-                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 100_overwrittenGray " + systemName + ".png"));
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
+            //            try {
+            //                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(overwrittenGray), null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 100_overwrittenGray " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
 
             // Remove cyan arcs of landable planets
             GrayF32 noArcsGray = overwrittenGray.clone();
@@ -239,56 +251,65 @@ public class SysmapScanner {
                     }
                 }
             }
-            try {
-                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(noArcsGray), null);
-                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 110_noArcsGray " + systemName + ".png"));
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
+            //            try {
+            //                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(noArcsGray), null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 110_noArcsGray " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
 
             // Amplify
             GrayF32 amplified = GrayImageOps.brighten(noArcsGray, -0.04f, 1.0f, null);
-            amplified = GrayImageOps.stretch(amplified, 8.0f, 0.0f, 1.0f, null);
-            try {
-                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(amplified), null);
-                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 120_amplified " + systemName + ".png"));
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
+            amplified = GrayImageOps.stretch(amplified, 6.0f, 0.0f, 1.0f, null);
+            //            try {
+            //                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(amplified), null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 120_amplified " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
 
             // Blur
             GrayF32 blurred = GBlurImageOps.gaussian(amplified, null, -1, 13, null);
-            try {
-                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(blurred), null);
-                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 130_blurred " + systemName + ".png"));
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
+            //            try {
+            //                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(blurred), null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 130_blurred " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
 
             // Threshold
             GrayU8 thresholded = new GrayU8(blurred.width, blurred.height);
             ThresholdImageOps.threshold(blurred, thresholded, 0.5f, false);
-            try {
-                BufferedImage debugImage = VisualizeBinaryData.renderBinary(thresholded, false, null);
-                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 140_thresholded " + systemName + ".png"));
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
+            //            try {
+            //                BufferedImage debugImage = VisualizeBinaryData.renderBinary(thresholded, false, null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 140_thresholded " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
 
             detector.process(ImageUtil.denormalize255(thresholded), thresholded);
             ellipses = detector.getFoundEllipses();
             logger.debug("Found " + ellipses.size + " ellipse(s) in " + detector.getAllContours().size() + " contour(s)");
 
-            // Keep only big and circle ones
-            List<EllipseRotated_F64> smallEllipses = new ArrayList<>();
+            // Keep only circle ones
+            List<EllipseRotated_F64> brightCircles = new ArrayList<>();
             for (int i = 0; i < ellipses.size; i++) {
                 EllipseRotated_F64 e = ellipses.get(i);
-                if (e.a >= 5 && e.b >= 5 && e.a / e.b < 3) {
-                    smallEllipses.add(new EllipseRotated_F64(e));
-                    rects.add(new Rectangle((int) (e.center.x - e.a), (int) (e.center.y - e.a), (int) (2 * e.a), (int) (2 * e.a)));
+                if (e.a >= 5 && e.b >= 5 && e.a / e.b < 1.5) {
+                    brightCircles.add(new EllipseRotated_F64(e));
+                    int x = Math.max(0, (int) (e.center.x - e.a) - 5);
+                    int y = Math.max(0, (int) (e.center.y - e.a) - 5);
+                    int s = (int) (2 * e.a) + 10;
+                    if (x + s > rgb.width) {
+                        s = rgb.width - x;
+                    }
+                    if (y + s > rgb.height) {
+                        s = rgb.height - y;
+                    }
+                    rects.add(new Rectangle(x, y, s, s));
                 }
             }
-            logger.debug("Kept " + smallEllipses.size() + " small ellipse(s) of " + ellipses.size + " total ellipse(s)");
+            logger.debug("Kept " + brightCircles.size() + " bright circle(s) of " + ellipses.size + " total ellipse(s)");
 
             try {
                 BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
@@ -299,12 +320,141 @@ public class SysmapScanner {
                     VisualizeShapes.drawEllipse(bc, g2);
                     g2.drawString(String.format(Locale.US, "%.1f / %.1f = %.6f", bc.a, bc.b, bc.a / bc.b), (int) bc.center.x, (int) bc.center.y);
                 }
-                for (EllipseRotated_F64 se : smallEllipses) {
+                for (EllipseRotated_F64 se : brightCircles) {
                     VisualizeShapes.drawEllipse(se, g2);
                     g2.drawString(String.format(Locale.US, "%.1f", se.a / se.b), (int) se.center.x, (int) se.center.y);
                 }
                 g2.dispose();
-                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 198_bodies " + systemName + ".png"));
+                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 198_brightCircles " + systemName + ".png"));
+            } catch (IOException e1) {
+                e1.printStackTrace();
+            }
+
+            // Overwrite the found ones with black
+            // TODO alpha
+            tmpBI = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
+            tmpG = tmpBI.createGraphics();
+            tmpG.setColor(Color.BLACK);
+            tmpG.fillRect(0, 0, 420, 1080);
+            for (EllipseRotated_F64 c : bigCircles) {
+                tmpG.fillOval((int) (c.center.x - c.a) - 25, (int) (c.center.y - c.a) - 25, (int) (2 * c.a) + 50, (int) (2 * c.a) + 50);
+            }
+            for (EllipseRotated_F64 c : brightCircles) {
+                tmpG.fillOval((int) (c.center.x - c.a) - 15, (int) (c.center.y - c.a) - 15, (int) (2 * c.a) + 30, (int) (2 * c.a) + 30);
+            }
+            tmpG.dispose();
+            overwrittenRgb = ImageUtil.normalize255(ConvertBufferedImage.convertFromMulti(tmpBI, null, true, GrayF32.class));
+            //            try {
+            //                ImageIO.write(tmpBI, "PNG", new File(debugFolder, "DEBUG " + ts + " 199_overwrittenRgb " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
+
+            // Convert to gray
+            overwrittenGray = ConvertImage.average(overwrittenRgb, null);
+            //            try {
+            //                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(overwrittenGray), null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 200_overwrittenGray " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
+
+            // Remove cyan arcs of landable planets
+            noArcsGray = overwrittenGray.clone();
+            overwrittenHsv = overwrittenRgb.createSameShape();
+            ColorHsv.rgbToHsv_F32(overwrittenRgb, overwrittenHsv);
+            for (int y = 0; y < overwrittenHsv.height; y++) {
+                for (int x = 420; x < overwrittenHsv.width; x++) {
+                    float h = overwrittenHsv.bands[0].unsafe_get(x, y);
+                    float s = overwrittenHsv.bands[1].unsafe_get(x, y);
+                    float v = overwrittenHsv.bands[2].unsafe_get(x, y);
+
+                    if (s >= 0.75f) {
+                        if (h >= Math.toRadians(190) && h <= Math.toRadians(200)) {
+                            noArcsGray.unsafe_set(x, y, 0);
+                        }
+                    }
+                }
+            }
+            //            try {
+            //                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(noArcsGray), null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 210_noArcsGray " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
+
+            // Amplify
+            amplified = GrayImageOps.brighten(noArcsGray, -0.04f, 1.0f, null);
+            amplified = GrayImageOps.stretch(amplified, 999999.9f, 0.0f, 1.0f, null);
+            //            try {
+            //                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(amplified), null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 220_amplified " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
+
+            // Blur
+            blurred = GBlurImageOps.gaussian(amplified, null, -1, 17, null);
+            //            try {
+            //                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(blurred), null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 230_blurred " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
+
+            // Threshold
+            thresholded = new GrayU8(blurred.width, blurred.height);
+            ThresholdImageOps.threshold(blurred, thresholded, 0.5f, false);
+            //            try {
+            //                BufferedImage debugImage = VisualizeBinaryData.renderBinary(thresholded, false, null);
+            //                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 240_thresholded " + systemName + ".png"));
+            //            } catch (IOException e1) {
+            //                e1.printStackTrace();
+            //            }
+
+            detector.process(ImageUtil.denormalize255(thresholded), thresholded);
+            ellipses = detector.getFoundEllipses();
+            logger.debug("Found " + ellipses.size + " ellipse(s) in " + detector.getAllContours().size() + " contour(s)");
+
+            // Keep only circle ones
+            List<EllipseRotated_F64> darkCircles = new ArrayList<>();
+            for (int i = 0; i < ellipses.size; i++) {
+                EllipseRotated_F64 e = ellipses.get(i);
+                if (e.a >= 5 && e.b >= 5 && e.a / e.b < 1.5) {
+                    darkCircles.add(new EllipseRotated_F64(e));
+                    int x = Math.max(0, (int) (e.center.x - e.a) - 5);
+                    int y = Math.max(0, (int) (e.center.y - e.a) - 5);
+                    int s = (int) (2 * e.a) + 10;
+                    if (x + s > rgb.width) {
+                        s = rgb.width - x;
+                    }
+                    if (y + s > rgb.height) {
+                        s = rgb.height - y;
+                    }
+                    rects.add(new Rectangle(x, y, s, s));
+                }
+            }
+            logger.debug("Kept " + brightCircles.size() + " dark circle(s) of " + ellipses.size + " total ellipse(s)");
+
+            try {
+                BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
+                Graphics2D g2 = debugImage.createGraphics();
+                g2.setStroke(new BasicStroke(3));
+                g2.setColor(Color.GREEN);
+                for (EllipseRotated_F64 bc : bigCircles) {
+                    VisualizeShapes.drawEllipse(bc, g2);
+                    g2.drawString(String.format(Locale.US, "%.1f / %.1f = %.6f", bc.a, bc.b, bc.a / bc.b), (int) bc.center.x, (int) bc.center.y);
+                }
+                for (EllipseRotated_F64 se : brightCircles) {
+                    VisualizeShapes.drawEllipse(se, g2);
+                    g2.drawString(String.format(Locale.US, "%.1f", se.a / se.b), (int) se.center.x, (int) se.center.y);
+                }
+                for (EllipseRotated_F64 se : darkCircles) {
+                    VisualizeShapes.drawEllipse(se, g2);
+                    g2.drawString(String.format(Locale.US, "%.1f", se.a / se.b), (int) se.center.x, (int) se.center.y);
+                }
+                g2.dispose();
+                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 298_darkCircles " + systemName + ".png"));
             } catch (IOException e1) {
                 e1.printStackTrace();
             }
@@ -379,7 +529,7 @@ public class SysmapScanner {
                     }
                 }
                 g2.dispose();
-                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 199_result " + systemName + ".png"));
+                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 299_result " + systemName + ".png"));
             } catch (IOException e1) {
                 e1.printStackTrace();
             }
