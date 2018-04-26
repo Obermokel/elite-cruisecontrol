@@ -273,7 +273,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             }
 
             scanningMatch = TemplateMatcher.findBestMatchingLocationInRegion(orangeHudImage, 2, 860, 180, 110, this.refScanning);
-            if (scanningMatch.getErrorPerPixel() > 0.05f) {
+            if (scanningMatch.getErrorPerPixel() > 0.075f) {
                 scanningMatch = null;
             }
         } else {
@@ -530,7 +530,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     }
 
     private boolean isShipHudVisible(GrayF32 orangeHudImage) {
-        return TemplateMatcher.findBestMatchingLocation(orangeHudImage.subimage(1650, 900, 1900, 1050), this.refShipHud).getErrorPerPixel() <= 0.05f;
+        return TemplateMatcher.findBestMatchingLocation(orangeHudImage.subimage(1650, 900, 1900, 1050), this.refShipHud).getErrorPerPixel() <= 0.075f;
     }
 
     private void doEmergencyExit(String reason) {
