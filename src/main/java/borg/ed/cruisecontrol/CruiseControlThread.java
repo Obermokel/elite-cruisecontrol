@@ -105,7 +105,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private static final int COMPASS_REGION_X = 620;
 	private static final int COMPASS_REGION_Y = 777;
 	private static final int COMPASS_REGION_WIDTH = 190;
-	private static final int COMPASS_REGION_HEIGHT = 200;
+	private static final int COMPASS_REGION_HEIGHT = 220;
 	private TemplateMatch compassMatch = null;
 
 	private static final int TARGET_REGION_X = 555;
@@ -826,17 +826,17 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				}
 			} else {
 				// Controlled pitch
-				if (yPercent <= 40) {
-					if (yPercent <= 20) {
+				if (yPercent < 50) {
+					if (yPercent < 25) {
 						this.shipControl.setPitchUp(100);
 					} else {
-						this.shipControl.setPitchUp(Math.max(10, Math.round((1f - ((yPercent - 20) / 20f)) * 100f)));
+						this.shipControl.setPitchUp(Math.max(10, (50 - yPercent) * 2));
 					}
 				} else {
-					if (yPercent > 70) {
+					if (yPercent > 75) {
 						this.shipControl.setPitchDown(100);
 					} else {
-						this.shipControl.setPitchDown(Math.max(10, Math.round(((yPercent - 40) / 30f) * 100f)));
+						this.shipControl.setPitchDown(Math.max(10, (yPercent - 50) * 2));
 					}
 				}
 				// Roll to target
