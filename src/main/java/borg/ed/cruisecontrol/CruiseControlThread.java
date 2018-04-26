@@ -305,22 +305,30 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 this.shipControl.releaseAllKeys();
                 break;
             case FSD_CHARGING:
-                if (this.shipControl.getThrottle() < 100) {
-                    this.shipControl.setThrottle(100);
-                }
-                if (System.currentTimeMillis() - this.fsdChargingSince > 15000) {
+                if (this.brightnessAhead > 0.15f) {
+                    this.shipControl.setPitchDown(100);
+                    this.shipControl.setRollLeft(10);
                     if (this.shipControl.getThrottle() != 75) {
                         this.shipControl.setThrottle(75);
                     }
-                } else if (System.currentTimeMillis() - this.fsdChargingSince > 20000) {
-                    if (this.shipControl.getThrottle() != 100) {
+                } else {
+                    if (this.shipControl.getThrottle() < 100) {
                         this.shipControl.setThrottle(100);
                     }
-                }
-                if (targetMatch != null) {
-                    this.alignToTargetInHud(targetMatch);
-                } else {
-                    this.alignToTargetInCompass(compassMatch, compassDotMatch);
+                    if (System.currentTimeMillis() - this.fsdChargingSince > 15000) {
+                        if (this.shipControl.getThrottle() != 75) {
+                            this.shipControl.setThrottle(75);
+                        }
+                    } else if (System.currentTimeMillis() - this.fsdChargingSince > 20000) {
+                        if (this.shipControl.getThrottle() != 100) {
+                            this.shipControl.setThrottle(100);
+                        }
+                    }
+                    if (targetMatch != null) {
+                        this.alignToTargetInHud(targetMatch);
+                    } else {
+                        this.alignToTargetInCompass(compassMatch, compassDotMatch);
+                    }
                 }
                 break;
             case IN_HYPERSPACE:
@@ -377,6 +385,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 }
                 if (this.brightnessAhead > 0.10f) {
                     this.shipControl.setPitchDown(100);
+                    this.shipControl.setRollLeft(10);
                 } else {
                     this.shipControl.stopTurning();
                 }
@@ -387,16 +396,21 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 }
                 break;
             case ESCAPE_FROM_STAR_FASTER:
-                if (this.shipControl.getThrottle() != 75) {
-                    this.shipControl.setThrottle(75);
-                }
                 if (this.brightnessAhead > 0.15f) {
+                    if (this.shipControl.getThrottle() != 75) {
+                        this.shipControl.setThrottle(75);
+                    }
                     this.shipControl.setPitchDown(100);
+                    this.shipControl.setRollLeft(10);
                 } else {
                     this.shipControl.stopTurning();
+                    if (this.shipControl.getThrottle() != 100) {
+                        this.shipControl.setThrottle(100);
+                    }
                 }
                 if (System.currentTimeMillis() - this.escapingFromStarSince > 10000) {
                     this.escapingFromStarSince = Long.MAX_VALUE;
+                    this.shipControl.stopTurning();
                     if (this.currentSystemNumDiscoveredBodies > 1 && !CruiseControlApplication.JONK_MODE) {
                         this.shipControl.setThrottle(0);
                         logger.debug("Open system map");
@@ -441,10 +455,30 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 break;
             case ALIGN_TO_NEXT_BODY:
                 if (this.brightnessAhead > 0.15f) {
-                    if (this.shipControl.getThrottle() != 25) {
-                        this.shipControl.setThrottle(25);
+                    // If it is a star then we are too close. Discard this star.
+                    if (this.currentSysmapBody.solarMasses != null) {
+                        this.currentSysmapBody.unexplored = false; // Mark as explored
+                        if (this.nextBodyToScan() == null) {
+                            this.shipControl.setThrottle(100);
+                            this.shipControl.selectNextSystemInRoute();
+                            this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+                            logger.debug("Discarded a star to scan, no other body to scan, aligning to next jump target at 100% throttle");
+                        } else {
+                            this.shipControl.setThrottle(0);
+                            this.shipControl.stopTurning();
+                            logger.debug("Open system map");
+                            this.robot.mouseMove(1, 1);
+                            this.shipControl.toggleSystemMap();
+                            this.gameState = GameState.WAIT_FOR_SYSTEM_MAP;
+                            logger.debug("Discarded a star to scan, waiting for system map at 0% throttle");
+                        }
+                    } else {
+                        if (this.shipControl.getThrottle() != 25) {
+                            this.shipControl.setThrottle(25);
+                        }
+                        this.shipControl.setPitchDown(100);
+                        this.shipControl.setRollLeft(10);
                     }
-                    this.shipControl.setPitchDown(100);
                 } else {
                     if (targetMatch != null) {
                         if (this.shipControl.getThrottle() != 0) {
@@ -465,6 +499,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                             logger.debug("Next body in sight, accelerating to 75% and waiting for detailed surface scan");
                         }
                     } else {
+                        // Neither HUD target nor compass visible, probably hard to recognize because our cockpit is full of
+                        // light from a nearby star. Therefore carefully throttle ahead without turning.
+                        this.shipControl.stopTurning();
                         if (this.shipControl.getThrottle() != 25) {
                             this.shipControl.setThrottle(25);
                         }
@@ -473,10 +510,30 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 break;
             case APPROACH_NEXT_BODY:
                 if (this.brightnessAhead > 0.15f) {
-                    if (this.shipControl.getThrottle() != 25) {
-                        this.shipControl.setThrottle(25);
+                    // If it is a star then we are too close. Discard this star.
+                    if (this.currentSysmapBody.solarMasses != null) {
+                        this.currentSysmapBody.unexplored = false; // Mark as explored
+                        if (this.nextBodyToScan() == null) {
+                            this.shipControl.setThrottle(100);
+                            this.shipControl.selectNextSystemInRoute();
+                            this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+                            logger.debug("Discarded a star to scan, no other body to scan, aligning to next jump target at 100% throttle");
+                        } else {
+                            this.shipControl.setThrottle(0);
+                            this.shipControl.stopTurning();
+                            logger.debug("Open system map");
+                            this.robot.mouseMove(1, 1);
+                            this.shipControl.toggleSystemMap();
+                            this.gameState = GameState.WAIT_FOR_SYSTEM_MAP;
+                            logger.debug("Discarded a star to scan, waiting for system map at 0% throttle");
+                        }
+                    } else {
+                        if (this.shipControl.getThrottle() != 25) {
+                            this.shipControl.setThrottle(25);
+                        }
+                        this.shipControl.setPitchDown(100);
+                        this.shipControl.setRollLeft(10);
                     }
-                    this.shipControl.setPitchDown(100);
                 } else {
                     if (scanningMatch != null) {
                         if (this.shipControl.getThrottle() != 0) {
@@ -514,26 +571,37 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 break;
             case WAIT_FOR_SHIP_HUD:
                 if (this.isShipHudVisible(orangeHudImage)) {
-                    this.shipControl.setThrottle(25);
+                    this.shipControl.setThrottle(0);
                     this.gameState = GameState.ALIGN_TO_NEXT_BODY;
-                    logger.debug("Ship HUD visible, aligning to next body at 25% throttle");
+                    logger.debug("Ship HUD visible, aligning to next body at 0% throttle");
                 }
                 break;
             case ALIGN_TO_NEXT_SYSTEM:
-                if (this.shipControl.getThrottle() != 75) {
-                    this.shipControl.setThrottle(75);
-                }
-                if (targetMatch != null) {
-                    if (this.alignToTargetInHud(targetMatch) && System.currentTimeMillis() - this.lastScannedBodyAt > 2000) {
-                        this.shipControl.toggleFsd();
-                        this.gameState = GameState.FSD_CHARGING;
-                        logger.debug("Next system in sight, charging FSD");
+                if (this.brightnessAhead > 0.15f) {
+                    if (this.shipControl.getThrottle() != 25) {
+                        this.shipControl.setThrottle(25);
                     }
+                    this.shipControl.setPitchDown(100);
+                    this.shipControl.setRollLeft(10);
                 } else {
-                    if (this.alignToTargetInCompass(compassMatch, compassDotMatch) && System.currentTimeMillis() - this.lastScannedBodyAt > 2000) {
-                        this.shipControl.toggleFsd();
-                        this.gameState = GameState.FSD_CHARGING;
-                        logger.debug("Next system in sight, charging FSD");
+                    if (targetMatch != null) {
+                        if (this.shipControl.getThrottle() != 100) {
+                            this.shipControl.setThrottle(100);
+                        }
+                        if (this.alignToTargetInHud(targetMatch) && System.currentTimeMillis() - this.lastScannedBodyAt > 2000) {
+                            this.shipControl.toggleFsd();
+                            this.gameState = GameState.FSD_CHARGING;
+                            logger.debug("Next system in sight, charging FSD");
+                        }
+                    } else {
+                        if (this.shipControl.getThrottle() != 75) {
+                            this.shipControl.setThrottle(75);
+                        }
+                        if (this.alignToTargetInCompass(compassMatch, compassDotMatch) && System.currentTimeMillis() - this.lastScannedBodyAt > 2000) {
+                            this.shipControl.toggleFsd();
+                            this.gameState = GameState.FSD_CHARGING;
+                            logger.debug("Next system in sight, charging FSD");
+                        }
                     }
                 }
                 break;
