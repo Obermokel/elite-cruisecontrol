@@ -519,6 +519,15 @@ public class SysmapScanner {
 					} else {
 						g2.drawString(SysmapBody.getAbbreviatedType(b), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 30);
 					}
+					if (b.earthMasses != null) {
+						g2.drawString(String.format(Locale.US, "%.4f Em", b.earthMasses), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 45);
+					} else if (b.solarMasses != null) {
+						g2.drawString(String.format(Locale.US, "%.4f Sm", b.solarMasses), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 45);
+					} else if (b.moonMasses != null) {
+						g2.drawString(String.format(Locale.US, "%.4f Mm", b.moonMasses), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 45);
+					} else {
+						g2.drawString("?.???? Xm", b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 45);
+					}
 				}
 				g2.dispose();
 				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 299_result " + systemName + ".png"));

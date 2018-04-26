@@ -275,13 +275,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				int sixSecondsX = targetMatch.getX() + 90;
 				int sixSecondsY = targetMatch.getY() + 75;
 				sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refSixSeconds);
-				if (sixSecondsMatch.getErrorPerPixel() > 0.15f) {
+				if (sixSecondsMatch.getErrorPerPixel() > 0.03f) {
 					sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refSevenSeconds);
-					if (sixSecondsMatch.getErrorPerPixel() > 0.15f) {
+					if (sixSecondsMatch.getErrorPerPixel() > 0.03f) {
 						sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refEightSeconds);
-						if (sixSecondsMatch.getErrorPerPixel() > 0.15f) {
+						if (sixSecondsMatch.getErrorPerPixel() > 0.03f) {
 							sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refNineSeconds);
-							if (sixSecondsMatch.getErrorPerPixel() > 0.15f) {
+							if (sixSecondsMatch.getErrorPerPixel() > 0.03f) {
 								sixSecondsMatch = null;
 							}
 						}
@@ -752,7 +752,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			xPercent = (x * 100) / CruiseControlApplication.SCALED_WIDTH;
 			yPercent = (y * 100) / CruiseControlApplication.SCALED_HEIGHT;
 
-			if (xPercent >= 48 && xPercent <= 52 && yPercent >= 48 && yPercent <= 52) {
+			if (xPercent >= 49 && xPercent <= 51 && yPercent >= 49 && yPercent <= 51) {
 				this.shipControl.stopTurning();
 				return true;
 			}
@@ -924,8 +924,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		int startX = this.targetMatch == null ? TARGET_REGION_WIDTH / 2 : this.targetMatch.getX() - TARGET_REGION_X;
 		int startY = this.targetMatch == null ? TARGET_REGION_HEIGHT / 2 : this.targetMatch.getY() - TARGET_REGION_Y;
 		TemplateMatch m = TemplateMatcher.findBestMatchingLocationInRegionSmart(yellowHudImage, TARGET_REGION_X, TARGET_REGION_Y, TARGET_REGION_WIDTH, TARGET_REGION_HEIGHT, this.refTarget,
-				startX, startY, 0.04f);
-		return m.getErrorPerPixel() < 0.04f ? m : null;
+				startX, startY, 0.020f);
+		return m.getErrorPerPixel() < 0.020f ? m : null;
 	}
 
 	private void loadRefImages() {
@@ -998,7 +998,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 		long millis = System.currentTimeMillis() - this.lastTick;
 		double fps = 1000.0 / Math.max(1, millis);
-		g.setColor(Color.GREEN);
+		g.setColor(new Color(170, 170, 250));
 		g.setFont(new Font("Sans Serif", Font.BOLD, 20));
 		g.drawString(String.format(Locale.US, "%.2f FPS / %s", fps, this.gameState), 10, 30);
 		g.drawString(String.format(Locale.US, "x=%d%% / y=%d%%", this.xPercent, this.yPercent), 10, 60);
@@ -1070,6 +1070,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					debugImage.setRGB(x, y, new Color((int) r, (int) (r * 0.15f), (int) (r * 0.15f)).getRGB());
 				} else if (bw > 0) {
 					debugImage.setRGB(x, y, new Color((int) (bw * 0.66f), (int) (bw * 0.66f), (int) bw).getRGB());
+				} else if (ye > 0) {
+					debugImage.setRGB(x, y, new Color((int) (ye * 0.77f), (int) (ye * 0.66f), 0).getRGB());
 				} else if (o > 0) {
 					debugImage.setRGB(x, y, new Color((int) o, (int) (o * 0.5f), 0).getRGB());
 				} else if (b > 0) {
