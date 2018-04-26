@@ -22,6 +22,7 @@ public class DebugPanel extends JPanel {
     private BufferedImage debugImage = null;
 
     private GrayF32 orangeHudImage = null;
+    private GrayF32 yellowHudImage = null;
     private GrayF32 blueWhiteHudImage = null;
     private GrayF32 redHudImage = null;
     private GrayF32 brightImage = null;
@@ -30,10 +31,11 @@ public class DebugPanel extends JPanel {
 
     }
 
-    public void updateScreenCapture(BufferedImage debugImage, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
+    public void updateScreenCapture(BufferedImage debugImage, GrayF32 orangeHudImage, GrayF32 yellowHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
         this.debugImage = debugImage;
 
         this.orangeHudImage = orangeHudImage;
+        this.yellowHudImage = yellowHudImage;
         this.blueWhiteHudImage = blueWhiteHudImage;
         this.redHudImage = redHudImage;
         this.brightImage = brightImage;
@@ -50,9 +52,11 @@ public class DebugPanel extends JPanel {
 
             ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.orangeHudImage), null), "PNG",
                     new File(debugFolder, "DEBUG " + ts + " cc_view_10_orange.png"));
+            ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.yellowHudImage), null), "PNG",
+                    new File(debugFolder, "DEBUG " + ts + " cc_view_11_yellow.png"));
             ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.blueWhiteHudImage), null), "PNG",
-                    new File(debugFolder, "DEBUG " + ts + " cc_view_11_bluewhite.png"));
-            ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.redHudImage), null), "PNG", new File(debugFolder, "DEBUG " + ts + " cc_view_12_red.png"));
+                    new File(debugFolder, "DEBUG " + ts + " cc_view_12_bluewhite.png"));
+            ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.redHudImage), null), "PNG", new File(debugFolder, "DEBUG " + ts + " cc_view_13_red.png"));
             ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.brightImage), null), "PNG", new File(debugFolder, "DEBUG " + ts + " cc_view_20_bright.png"));
         } catch (IOException e1) {
             e1.printStackTrace();

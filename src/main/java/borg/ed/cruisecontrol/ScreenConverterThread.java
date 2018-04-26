@@ -34,6 +34,7 @@ public class ScreenConverterThread extends Thread {
         Planar<GrayF32> hsv = rgb.createSameShape();
 
         GrayF32 orangeHudImage = new GrayF32(CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
+        GrayF32 yellowHudImage = orangeHudImage.createSameShape();
         GrayF32 blueWhiteHudImage = orangeHudImage.createSameShape();
         GrayF32 redHudImage = orangeHudImage.createSameShape();
         GrayF32 brightImage = orangeHudImage.createSameShape();
@@ -52,13 +53,14 @@ public class ScreenConverterThread extends Thread {
             // Convert into relevant color bands
             rgb = ImageUtil.normalize255(rgb);
             ColorHsv.rgbToHsv_F32(rgb, hsv);
-            this.hsvToHudImages(hsv, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
+            this.hsvToHudImages(hsv, orangeHudImage, yellowHudImage, blueWhiteHudImage, redHudImage, brightImage);
 
             // Notify waiting threads
             synchronized (this.screenConverterResult) {
                 this.screenConverterResult.setRgb(rgb);
                 this.screenConverterResult.setHsv(hsv);
                 this.screenConverterResult.setOrangeHudImage(orangeHudImage);
+                this.screenConverterResult.setYellowHudImage(yellowHudImage);
                 this.screenConverterResult.setBlueWhiteHudImage(blueWhiteHudImage);
                 this.screenConverterResult.setRedHudImage(redHudImage);
                 this.screenConverterResult.setBrightImage(brightImage);
@@ -69,7 +71,7 @@ public class ScreenConverterThread extends Thread {
         logger.info(this.getName() + " stopped");
     }
 
-    private void hsvToHudImages(Planar<GrayF32> hsv, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
+    private void hsvToHudImages(Planar<GrayF32> hsv, GrayF32 orangeHudImage, GrayF32 yellowHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
         for (int y = 0; y < hsv.height; y++) {
             for (int x = 0; x < hsv.width; x++) {
                 float h = hsv.bands[0].unsafe_get(x, y);
@@ -81,6 +83,13 @@ public class ScreenConverterThread extends Thread {
                     orangeHudImage.unsafe_set(x, y, v);
                 } else {
                     orangeHudImage.unsafe_set(x, y, 0);
+                }
+
+                if ((s > 0.30f) && (v >= 0.70f) && (h >= 0.25f && h < 1.00f)) {
+                    // Yellow
+                    yellowHudImage.unsafe_set(x, y, v);
+                } else {
+                    yellowHudImage.unsafe_set(x, y, 0);
                 }
 
                 if (v >= 0.75f && s < 0.15f) {

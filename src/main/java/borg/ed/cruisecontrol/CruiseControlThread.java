@@ -75,6 +75,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     private Template refTarget = null;
     private Template refShipHud = null;
     private Template refSixSeconds = null;
+    private Template refSevenSeconds = null;
+    private Template refEightSeconds = null;
+    private Template refNineSeconds = null;
     private Template refScanning = null;
 
     private GameState gameState = GameState.UNKNOWN;
@@ -153,6 +156,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         Planar<GrayF32> rgb = new Planar<>(GrayF32.class, CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT, 3);
         Planar<GrayF32> hsv = rgb.createSameShape();
         GrayF32 orangeHudImage = new GrayF32(CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
+        GrayF32 yellowHudImage = orangeHudImage.createSameShape();
         GrayF32 blueWhiteHudImage = orangeHudImage.createSameShape();
         GrayF32 redHudImage = orangeHudImage.createSameShape();
         GrayF32 brightImage = orangeHudImage.createSameShape();
@@ -171,6 +175,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                         rgb = screenConverterResult.getRgb().clone();
                         hsv = screenConverterResult.getHsv().clone();
                         orangeHudImage = screenConverterResult.getOrangeHudImage().clone();
+                        yellowHudImage = screenConverterResult.getYellowHudImage().clone();
                         blueWhiteHudImage = screenConverterResult.getBlueWhiteHudImage().clone();
                         redHudImage = screenConverterResult.getRedHudImage().clone();
                         brightImage = screenConverterResult.getBrightImage().clone();
@@ -183,17 +188,17 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
                 // >>>> PROCESSING THE DATA >>>>
                 brightnessAhead = this.computeBrightnessAhead(brightImage);
-                TemplateMatch compassDotMatch = this.searchForCompassAndTarget(orangeHudImage, blueWhiteHudImage, threadPool);
-                this.searchForSixSecondsOrScanning(orangeHudImage, brightImage);
+                TemplateMatch compassDotMatch = this.searchForCompassAndTarget(orangeHudImage, yellowHudImage, blueWhiteHudImage, threadPool);
+                this.searchForSixSecondsOrScanning(orangeHudImage, yellowHudImage);
                 this.handleGameState(rgb, hsv, orangeHudImage, compassDotMatch);
                 // <<<< PROCESSING THE DATA <<<<
 
                 // >>>> DEBUG IMAGE >>>>
                 if (CruiseControlApplication.SHOW_LIVE_DEBUG_IMAGE) {
-                    this.drawColoredDebugImage(debugImage, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
+                    this.drawColoredDebugImage(debugImage, orangeHudImage, yellowHudImage, blueWhiteHudImage, redHudImage, brightImage);
                     this.drawDebugInfoOnImage(debugImage, compassDotMatch);
                     for (DebugImageListener listener : this.debugImageListeners) {
-                        listener.onNewDebugImage(debugImage, orangeHudImage, blueWhiteHudImage, redHudImage, brightImage);
+                        listener.onNewDebugImage(debugImage, orangeHudImage, yellowHudImage, blueWhiteHudImage, redHudImage, brightImage);
                     }
                 }
                 // <<<< DEBUG IMAGE <<<<
@@ -206,18 +211,20 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         logger.info(this.getName() + " stopped");
     }
 
-    private TemplateMatch searchForCompassAndTarget(GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, final ExecutorService threadPool) throws InterruptedException, ExecutionException {
+    private TemplateMatch searchForCompassAndTarget(GrayF32 orangeHudImage, GrayF32 yellowHudImage, GrayF32 blueWhiteHudImage, final ExecutorService threadPool)
+            throws InterruptedException, ExecutionException {
         compassMatch = null;
         targetMatch = null;
         if (gameState == GameState.UNKNOWN || gameState == GameState.ALIGN_TO_NEXT_SYSTEM || gameState == GameState.FSD_CHARGING || gameState == GameState.ALIGN_TO_NEXT_BODY
                 || gameState == GameState.APPROACH_NEXT_BODY) {
-            final GrayF32 myOrangeHudImage = orangeHudImage.clone(); // TODO Why is this cloned?
+            final GrayF32 myYellowHudImage = yellowHudImage;
             Future<TemplateMatch> futureTarget = threadPool.submit(new Callable<TemplateMatch>() {
                 @Override
                 public TemplateMatch call() throws Exception {
-                    return locateTargetSmart(myOrangeHudImage);
+                    return locateTargetSmart(myYellowHudImage);
                 }
             });
+            final GrayF32 myOrangeHudImage = orangeHudImage;
             Future<TemplateMatch> futureCompass = threadPool.submit(new Callable<TemplateMatch>() {
                 @Override
                 public TemplateMatch call() throws Exception {
@@ -259,16 +266,25 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         return compassDotMatch;
     }
 
-    private void searchForSixSecondsOrScanning(GrayF32 orangeHudImage, GrayF32 brightImage) {
+    private void searchForSixSecondsOrScanning(GrayF32 orangeHudImage, GrayF32 yellowHudImage) {
         if (gameState == GameState.APPROACH_NEXT_BODY) {
             if (targetMatch == null) {
                 sixSecondsMatch = null;
             } else {
                 int sixSecondsX = targetMatch.getX() + 90;
                 int sixSecondsY = targetMatch.getY() + 75;
-                sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(brightImage, sixSecondsX, sixSecondsY, 82, 28, this.refSixSeconds);
+                sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refSixSeconds);
                 if (sixSecondsMatch.getErrorPerPixel() > 0.15f) {
-                    sixSecondsMatch = null;
+                    sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refSevenSeconds);
+                    if (sixSecondsMatch.getErrorPerPixel() > 0.15f) {
+                        sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refEightSeconds);
+                        if (sixSecondsMatch.getErrorPerPixel() > 0.15f) {
+                            sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refNineSeconds);
+                            if (sixSecondsMatch.getErrorPerPixel() > 0.15f) {
+                                sixSecondsMatch = null;
+                            }
+                        }
+                    }
                 }
             }
 
@@ -836,10 +852,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         return m.getErrorPerPixel() < 0.25f ? m : null;
     }
 
-    private TemplateMatch locateTargetSmart(GrayF32 orangeHudImage) {
+    private TemplateMatch locateTargetSmart(GrayF32 yellowHudImage) {
         int startX = this.targetMatch == null ? TARGET_REGION_WIDTH / 2 : this.targetMatch.getX() - TARGET_REGION_X;
         int startY = this.targetMatch == null ? TARGET_REGION_HEIGHT / 2 : this.targetMatch.getY() - TARGET_REGION_Y;
-        TemplateMatch m = TemplateMatcher.findBestMatchingLocationInRegionSmart(orangeHudImage, TARGET_REGION_X, TARGET_REGION_Y, TARGET_REGION_WIDTH, TARGET_REGION_HEIGHT, this.refTarget,
+        TemplateMatch m = TemplateMatcher.findBestMatchingLocationInRegionSmart(yellowHudImage, TARGET_REGION_X, TARGET_REGION_Y, TARGET_REGION_WIDTH, TARGET_REGION_HEIGHT,
+                this.refTarget,
                 startX, startY, 0.04f);
         return m.getErrorPerPixel() < 0.04f ? m : null;
     }
@@ -854,6 +871,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             this.refTarget = Template.fromFile(new File(refDir, "target.png"));
             this.refShipHud = Template.fromFile(new File(refDir, "ship_hud.png"));
             this.refSixSeconds = Template.fromFile(new File(refDir, "six_seconds.png"));
+            this.refSevenSeconds = Template.fromFile(new File(refDir, "seven_seconds.png"));
+            this.refEightSeconds = Template.fromFile(new File(refDir, "eight_seconds.png"));
+            this.refNineSeconds = Template.fromFile(new File(refDir, "nine_seconds.png"));
             this.refScanning = Template.fromFile(new File(refDir, "scanning.png"));
         } catch (IOException e) {
             throw new RuntimeException("Failed to load ref images", e);
@@ -971,11 +991,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         g.dispose();
     }
 
-    private void drawColoredDebugImage(BufferedImage debugImage, GrayF32 orangeHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
+    private void drawColoredDebugImage(BufferedImage debugImage, GrayF32 orangeHudImage, GrayF32 yellowHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage,
+            GrayF32 brightImage) {
         for (int y = 0; y < debugImage.getHeight(); y++) {
             for (int x = 0; x < debugImage.getWidth(); x++) {
                 float r = redHudImage.unsafe_get(x, y) * 255;
                 float bw = blueWhiteHudImage.unsafe_get(x, y) * 255;
+                float ye = yellowHudImage.unsafe_get(x, y) * 255; // TODO Draw yellow on debug image
                 float o = orangeHudImage.unsafe_get(x, y) * 255;
                 float b = brightImage.unsafe_get(x, y) * 255;
                 if (r > 0) {
