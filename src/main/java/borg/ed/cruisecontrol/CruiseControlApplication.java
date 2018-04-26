@@ -31,9 +31,9 @@ public class CruiseControlApplication {
 	public static final boolean JONK_MODE = false;
 	public static final boolean SHOW_LIVE_DEBUG_IMAGE = true;
 	public static final boolean WRITE_SYSMAP_DEBUG_RGB_ORIGINAL = true;
-	public static final boolean WRITE_SYSMAP_DEBUG_GRAY = true;
-	public static final boolean WRITE_SYSMAP_DEBUG_THRESHOLD = true;
-	public static final boolean WRITE_SYSMAP_DEBUG_RGB_RESULT = true;
+	public static final boolean WRITE_SYSMAP_DEBUG_GRAY = false;
+	public static final boolean WRITE_SYSMAP_DEBUG_THRESHOLD = false;
+	public static final boolean WRITE_SYSMAP_DEBUG_RGB_RESULT = false;
 	public static final boolean WRITE_SYSMAP_DEBUG_BODY_RGB_ORIGINAL = true;
 	public static final boolean WRITE_SYSMAP_DEBUG_BODY_GRAY = true;
 	public static final boolean WRITE_SYSMAP_DEBUG_BODY_RGB_RESULT = true;

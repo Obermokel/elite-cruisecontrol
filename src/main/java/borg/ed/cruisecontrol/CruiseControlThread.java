@@ -557,6 +557,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					}
 
 					// Full stop, then exit
+					this.robot.mouseMove(1, 1);
 					this.shipControl.fullStop();
 					this.shipControl.exitToMainMenu();
 
@@ -1085,6 +1086,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						}
 					} else {
 						logger.info("Correctly guessed " + guessedBodyType + ", and was " + scannedBodyType);
+						this.sysmapScanner.reloadTemplates();
 					}
 				}
 
@@ -1152,7 +1154,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	}
 
 	private SysmapBody nextBodyToScan() {
-		final boolean alreadyScannedStar = this.currentSystemScannedBodies.stream().filter(e -> StringUtils.isNotEmpty(e.getStarType())).findFirst().isPresent();
+		final boolean alreadyScannedStar = this.currentSystemScannedBodies.isEmpty()
+				|| this.currentSystemScannedBodies.stream().filter(e -> StringUtils.isNotEmpty(e.getStarType())).findFirst().isPresent();
 		return this.sysmapScannerResult.getBodies().stream().filter( //
 				b -> b.unexplored && // Of course only unexplored
 						b.moonMasses == null && // No belts please

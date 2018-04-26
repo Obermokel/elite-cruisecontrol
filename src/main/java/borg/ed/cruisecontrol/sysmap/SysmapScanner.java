@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
 import boofcv.alg.color.ColorHsv;
 import boofcv.alg.filter.basic.GrayImageOps;
 import boofcv.alg.filter.binary.BinaryImageOps;
-import boofcv.alg.filter.binary.Contour;
 import boofcv.alg.filter.binary.ThresholdImageOps;
 import boofcv.alg.filter.blur.GBlurImageOps;
 import boofcv.alg.shapes.ellipse.BinaryEllipseDetector;
@@ -43,7 +42,6 @@ import boofcv.factory.shape.FactoryShapeDetector;
 import boofcv.gui.binary.VisualizeBinaryData;
 import boofcv.gui.feature.VisualizeShapes;
 import boofcv.io.image.ConvertBufferedImage;
-import boofcv.struct.ConnectRule;
 import boofcv.struct.image.GrayF32;
 import boofcv.struct.image.GrayU8;
 import boofcv.struct.image.Planar;
@@ -56,7 +54,6 @@ import borg.ed.cruisecontrol.templatematching.TemplateMatcher;
 import borg.ed.cruisecontrol.templatematching.TemplateRgb;
 import borg.ed.cruisecontrol.util.ImageUtil;
 import borg.ed.cruisecontrol.util.MouseUtil;
-import georegression.struct.point.Point2D_I32;
 import georegression.struct.shapes.EllipseRotated_F64;
 
 public class SysmapScanner {
@@ -127,6 +124,8 @@ public class SysmapScanner {
 			logger.debug("Start scanning system map");
 			long scanStart = System.currentTimeMillis();
 
+			List<Rectangle> rects = new ArrayList<>();
+
 			// Convert to gray
 			GrayF32 gray = ConvertImage.average(rgb, null);
 			try {
@@ -163,6 +162,7 @@ public class SysmapScanner {
 
 			ConfigEllipseDetector config = new ConfigEllipseDetector();
 			config.maxDistanceFromEllipse = 20.0;
+			//config.checkRadialDistance = 20.0;
 			BinaryEllipseDetector<GrayU8> detector = FactoryShapeDetector.ellipse(config, GrayU8.class);
 			detector.process(ImageUtil.denormalize255(binary), binary);
 			FastQueue<EllipseRotated_F64> ellipses = detector.getFoundEllipses();
@@ -174,6 +174,7 @@ public class SysmapScanner {
 				EllipseRotated_F64 e = ellipses.get(i);
 				if (e.a > 50 && e.a / e.b < 1.1) {
 					bigCircles.add(new EllipseRotated_F64(e));
+					rects.add(new Rectangle((int) (e.center.x - e.b), (int) (e.center.y - e.b), (int) (2 * e.b), (int) (2 * e.b)));
 				}
 			}
 			logger.debug("Kept " + bigCircles.size() + " big circle(s) of " + ellipses.size + " total ellipse(s)");
@@ -244,7 +245,7 @@ public class SysmapScanner {
 
 			// Amplify
 			GrayF32 amplified = GrayImageOps.brighten(noArcsGray, -0.04f, 1.0f, null);
-			amplified = GrayImageOps.stretch(amplified, 10000.0f, 0.0f, 1.0f, null);
+			amplified = GrayImageOps.stretch(amplified, 8.0f, 0.0f, 1.0f, null);
 			try {
 				BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(amplified), null);
 				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 120_amplified " + systemName + ".png"));
@@ -281,6 +282,7 @@ public class SysmapScanner {
 				EllipseRotated_F64 e = ellipses.get(i);
 				if (e.a >= 5 && e.b >= 5 && e.a / e.b < 3) {
 					smallEllipses.add(new EllipseRotated_F64(e));
+					rects.add(new Rectangle((int) (e.center.x - e.a), (int) (e.center.y - e.a), (int) (2 * e.a), (int) (2 * e.a)));
 				}
 			}
 			logger.debug("Kept " + smallEllipses.size() + " small ellipse(s) of " + ellipses.size + " total ellipse(s)");
@@ -304,30 +306,30 @@ public class SysmapScanner {
 				e1.printStackTrace();
 			}
 
-			// Detect contours
-			List<Contour> contours = BinaryImageOps.contour(binary, ConnectRule.EIGHT, null);
-			logger.debug("Contours found: " + contours.size());
+			//			// Detect contours
+			//			List<Contour> contours = BinaryImageOps.contour(binary, ConnectRule.EIGHT, null);
+			//			logger.debug("Contours found: " + contours.size());
 
-			// Keep only those of planet or star size, remove noise
-			List<Rectangle> rects = new ArrayList<>();
-			for (Contour c : contours) {
-				int xMin = Integer.MAX_VALUE;
-				int xMax = Integer.MIN_VALUE;
-				int yMin = Integer.MAX_VALUE;
-				int yMax = Integer.MIN_VALUE;
-				for (Point2D_I32 p : c.external) {
-					xMin = Math.min(xMin, p.x);
-					xMax = Math.max(xMax, p.x);
-					yMin = Math.min(yMin, p.y);
-					yMax = Math.max(yMax, p.y);
-				}
-				int width = xMax - xMin;
-				int height = yMax - yMin;
-				if (width >= 15 && width <= 1000 && height >= 15 && height <= 1000) {
-					rects.add(new Rectangle(xMin, yMin, width, height));
-				}
-			}
-			logger.debug("Contours of reasonable size: " + rects.size());
+			//			// Keep only those of planet or star size, remove noise
+			//			List<Rectangle> rects = new ArrayList<>();
+			//			for (Contour c : contours) {
+			//				int xMin = Integer.MAX_VALUE;
+			//				int xMax = Integer.MIN_VALUE;
+			//				int yMin = Integer.MAX_VALUE;
+			//				int yMax = Integer.MIN_VALUE;
+			//				for (Point2D_I32 p : c.external) {
+			//					xMin = Math.min(xMin, p.x);
+			//					xMax = Math.max(xMax, p.x);
+			//					yMin = Math.min(yMin, p.y);
+			//					yMax = Math.max(yMax, p.y);
+			//				}
+			//				int width = xMax - xMin;
+			//				int height = yMax - yMin;
+			//				if (width >= 15 && width <= 1000 && height >= 15 && height <= 1000) {
+			//					rects.add(new Rectangle(xMin, yMin, width, height));
+			//				}
+			//			}
+			//			logger.debug("Contours of reasonable size: " + rects.size());
 
 			List<SysmapBody> bodies = new ArrayList<>();
 			for (Rectangle rect : rects) {
@@ -355,6 +357,28 @@ public class SysmapScanner {
 				Planar<GrayF32> bodyImage = rgb.subimage(b.areaInImage.x, b.areaInImage.y, b.areaInImage.x + b.areaInImage.width, b.areaInImage.y + b.areaInImage.height);
 				TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(bodyImage, this.refSysMapBodies);
 				b.bestBodyMatch = bestMatch;
+			}
+			try {
+				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
+				Graphics2D g2 = debugImage.createGraphics();
+				g2.setColor(Color.GREEN);
+				for (SysmapBody b : bodies) {
+					g2.drawRect(b.areaInImage.x, b.areaInImage.y, b.areaInImage.width, b.areaInImage.height);
+					if (b.distanceLs == null) {
+						g2.drawString("?.?? Ls", b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 15);
+					} else {
+						g2.drawString(String.format(Locale.US, "%.2f Ls", b.distanceLs), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 15);
+					}
+					if (b.bestBodyMatch == null) {
+						g2.drawString("???", b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 30);
+					} else {
+						g2.drawString(SysmapBody.getAbbreviatedType(b), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 30);
+					}
+				}
+				g2.dispose();
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 199_result " + systemName + ".png"));
+			} catch (IOException e1) {
+				e1.printStackTrace();
 			}
 
 			// Finished
@@ -483,10 +507,10 @@ public class SysmapScanner {
 				Matcher m = p.matcher(arrivalPointText);
 				if (m.matches()) {
 					StringBuilder sb = new StringBuilder(m.group(1).replaceAll("\\D", ""));
-					sb.insert(sb.length() - 2, ".");
 					try {
+						sb.insert(sb.length() - 2, ".");
 						b.distanceLs = new BigDecimal(sb.toString());
-					} catch (NumberFormatException e) {
+					} catch (Exception e) {
 						logger.error("Failed to parse '" + sb + "' (derived from the original '" + m.group(1) + "') to a BigDecimal");
 					}
 				}
@@ -504,10 +528,10 @@ public class SysmapScanner {
 				Matcher m = p.matcher(solarMassesText);
 				if (m.matches()) {
 					StringBuilder sb = new StringBuilder(m.group(1).replaceAll("\\D", ""));
-					sb.insert(sb.length() - 4, ".");
 					try {
+						sb.insert(sb.length() - 4, ".");
 						b.solarMasses = new BigDecimal(sb.toString());
-					} catch (NumberFormatException e) {
+					} catch (Exception e) {
 						logger.error("Failed to parse '" + sb + "' (derived from the original '" + m.group(1) + "') to a BigDecimal");
 					}
 				}
@@ -525,10 +549,10 @@ public class SysmapScanner {
 				Matcher m = p.matcher(moonMassesText);
 				if (m.matches()) {
 					StringBuilder sb = new StringBuilder(m.group(1).replaceAll("\\D", ""));
-					sb.insert(sb.length() - 4, ".");
 					try {
+						sb.insert(sb.length() - 4, ".");
 						b.moonMasses = new BigDecimal(sb.toString());
-					} catch (NumberFormatException e) {
+					} catch (Exception e) {
 						logger.error("Failed to parse '" + sb + "' (derived from the original '" + m.group(1) + "') to a BigDecimal");
 					}
 				}
@@ -546,10 +570,10 @@ public class SysmapScanner {
 				Matcher m = p.matcher(earthMassesText);
 				if (m.matches()) {
 					StringBuilder sb = new StringBuilder(m.group(1).replaceAll("\\D", ""));
-					sb.insert(sb.length() - 4, ".");
 					try {
+						sb.insert(sb.length() - 4, ".");
 						b.earthMasses = new BigDecimal(sb.toString());
-					} catch (NumberFormatException e) {
+					} catch (Exception e) {
 						logger.error("Failed to parse '" + sb + "' (derived from the original '" + m.group(1) + "') to a BigDecimal");
 					}
 				}
@@ -583,7 +607,7 @@ public class SysmapScanner {
 	private String scanText(GrayF32 image, List<Template> textTemplates) {
 		List<TemplateMatch> allMatches = new ArrayList<>();
 		for (Template template : textTemplates) {
-			allMatches.addAll(TemplateMatcher.findAllMatchingLocations(image, template, 0.05f));
+			allMatches.addAll(TemplateMatcher.findAllMatchingLocations(image, template, 0.025f));
 		}
 		allMatches = allMatches.stream().sorted((m1, m2) -> new Float(m1.getErrorPerPixel()).compareTo(new Float(m2.getErrorPerPixel()))).collect(Collectors.toList());
 
@@ -594,6 +618,7 @@ public class SysmapScanner {
 			if (!intersectsWithAny(r, rects)) {
 				rects.add(r);
 				remainingMatches.add(m);
+				System.out.println(String.format(Locale.US, "%s = %.6f", m.getTemplate().getName(), m.getErrorPerPixel()));
 			}
 		}
 		for (TemplateMatch m : allMatches.stream().filter(m -> m.getTemplate().getName().matches("\\W+")).collect(Collectors.toList())) {
