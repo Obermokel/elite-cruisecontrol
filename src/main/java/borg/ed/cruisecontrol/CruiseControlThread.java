@@ -785,6 +785,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                     this.shipControl.setYawRight(Math.max(15, (xPercent - 50) * 2));
                 }
             }
+
+            if (xPercent >= 45 && xPercent <= 55 && yPercent >= 45 && yPercent <= 55) {
+                return true;
+            }
         }
 
         return false;
