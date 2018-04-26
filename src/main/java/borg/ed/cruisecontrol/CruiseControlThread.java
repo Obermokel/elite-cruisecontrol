@@ -98,6 +98,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     private int currentSystemNumDiscoveredBodies = 0;
     private SysmapBody currentSysmapBody = null;
     private SysmapScannerResult sysmapScannerResult = null;
+    private long lastScannedBodyAt = 0;
     private float lastScannedBodyDistanceFromArrival = 0;
     private long lastTick = System.currentTimeMillis();
 
@@ -519,17 +520,17 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 }
                 break;
             case ALIGN_TO_NEXT_SYSTEM:
-                if (this.shipControl.getThrottle() < 100) {
-                    this.shipControl.setThrottle(100);
+                if (this.shipControl.getThrottle() != 75) {
+                    this.shipControl.setThrottle(75);
                 }
                 if (targetMatch != null) {
-                    if (this.alignToTargetInHud(targetMatch)) {
+                    if (this.alignToTargetInHud(targetMatch) && System.currentTimeMillis() - this.lastScannedBodyAt > 2000) {
                         this.shipControl.toggleFsd();
                         this.gameState = GameState.FSD_CHARGING;
                         logger.debug("Next system in sight, charging FSD");
                     }
                 } else {
-                    if (this.alignToTargetInCompass(compassMatch, compassDotMatch)) {
+                    if (this.alignToTargetInCompass(compassMatch, compassDotMatch) && System.currentTimeMillis() - this.lastScannedBodyAt > 2000) {
                         this.shipControl.toggleFsd();
                         this.gameState = GameState.FSD_CHARGING;
                         logger.debug("Next system in sight, charging FSD");
@@ -839,11 +840,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         return false;
     }
 
-    private TemplateMatch locateCompass(GrayF32 orangeHudImage) {
-        TemplateMatch m = TemplateMatcher.findBestMatchingLocationInRegion(orangeHudImage, COMPASS_REGION_X, COMPASS_REGION_Y, COMPASS_REGION_WIDTH, COMPASS_REGION_HEIGHT, this.refCompass);
-        return m.getErrorPerPixel() < 0.15f ? m : null;
-    }
-
     private TemplateMatch locateCompassSmart(GrayF32 orangeHudImage) {
         int startX = this.compassMatch == null ? COMPASS_REGION_WIDTH / 2 : this.compassMatch.getX() - COMPASS_REGION_X;
         int startY = this.compassMatch == null ? COMPASS_REGION_HEIGHT / 2 : this.compassMatch.getY() - COMPASS_REGION_Y;
@@ -1072,6 +1068,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
             this.currentSystemScannedBodies = new ArrayList<>();
             this.currentSystemNumDiscoveredBodies = 0;
             this.sysmapScannerResult = null;
+            this.lastScannedBodyAt = 0;
             this.lastScannedBodyDistanceFromArrival = 0;
             this.gameState = GameState.IN_HYPERSPACE;
             logger.debug("Jumping through hyperspace to " + ((StartJumpEvent) event).getStarSystem());
@@ -1089,6 +1086,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         } else if (event instanceof DiscoveryScanEvent) {
             this.currentSystemNumDiscoveredBodies += MiscUtil.getAsInt(((DiscoveryScanEvent) event).getBodies(), 0);
         } else if (event instanceof ScanEvent) {
+            this.lastScannedBodyAt = System.currentTimeMillis();
             this.lastScannedBodyDistanceFromArrival = MiscUtil.getAsFloat(((ScanEvent) event).getDistanceFromArrivalLS(), 0f);
             if (this.currentSysmapBody != null) {
                 this.shipControl.setThrottle(0);
@@ -1119,7 +1117,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                         }
                     } else {
                         logger.info("Correctly guessed " + guessedBodyType + ", and was " + scannedBodyType);
-                        this.sysmapScanner.reloadTemplates();
                     }
                 }
 
