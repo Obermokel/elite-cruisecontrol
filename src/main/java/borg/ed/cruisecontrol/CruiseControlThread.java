@@ -88,6 +88,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     private long escapingFromStarSince = Long.MAX_VALUE;
     private boolean fsdCharging = false;
     private long fsdChargingSince = Long.MAX_VALUE;
+    private long getInScoopingRangeSince = Long.MAX_VALUE;
     private String currentSystemName = "";
     private List<Body> currentSystemKnownBodies = new ArrayList<>();
     private List<ScanEvent> currentSystemScannedBodies = new ArrayList<>();
@@ -323,6 +324,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                     this.shipControl.setThrottle(0);
                     this.gameState = GameState.SCOOPING_FUEL;
                     logger.debug("Scooping fuel...");
+                } else {
+                    if (System.currentTimeMillis() - getInScoopingRangeSince > 10000) {
+                        logger.warn("Did not scoop any fuel for 10 seconds, aligning to star escape now");
+                        this.shipControl.setThrottle(0);
+                        this.gameState = GameState.ALIGN_TO_STAR_ESCAPE;
+                    }
                 }
                 break;
             case SCOOPING_FUEL:
@@ -1013,6 +1020,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
             if (status.isFsdCooldown() && !this.fsdCooldown && this.gameState == GameState.WAIT_FOR_FSD_COOLDOWN) {
                 this.gameState = GameState.GET_IN_SCOOPING_RANGE;
+                this.getInScoopingRangeSince = System.currentTimeMillis();
                 logger.debug("FSD cooldown started, getting in scooping range");
             }
 
@@ -1163,7 +1171,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         return this.sysmapScannerResult.getBodies().stream().filter( //
                 b -> b.unexplored && // Of course only unexplored
                 b.moonMasses == null && // No belts please
-                        (!allowStars ? b.solarMasses == null : true) && // No further stars if already scanned one
+                (!allowStars ? b.solarMasses == null : true) && // No further stars if already scanned one
                 (b.earthMasses == null || b.earthMasses.floatValue() > 0.0099f) && // Not every mini-moon (0.99% and less earth masses) pls
                 ((b.distanceLs != null && b.distanceLs.floatValue() <= 12345f) || (b.solarMasses != null))) // Only close distance (or stars)
                 .sorted(new SensibleScanOrderComparator()).findFirst().orElse(null);
