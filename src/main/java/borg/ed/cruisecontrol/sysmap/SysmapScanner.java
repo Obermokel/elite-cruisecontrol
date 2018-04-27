@@ -869,7 +869,7 @@ public class SysmapScanner {
 			if (!intersectsWithAny(r, rects)) {
 				rects.add(r);
 				remainingMatches.add(m);
-				System.out.println(String.format(Locale.US, "%s = %.6f", m.getTemplate().getName(), m.getErrorPerPixel()));
+				logger.trace(String.format(Locale.US, "%s = %.6f", m.getTemplate().getName(), m.getErrorPerPixel()));
 			}
 		}
 		for (TemplateMatch m : allMatches.stream().filter(m -> m.getTemplate().getName().matches("\\W+")).collect(Collectors.toList())) {
