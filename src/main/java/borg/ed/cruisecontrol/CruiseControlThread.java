@@ -63,6 +63,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
     static final Logger logger = LoggerFactory.getLogger(CruiseControlThread.class);
 
+    private static final String REASON_END_OF_PLOTTED_ROUTE = "End of plotted route";
+
     private final Robot robot;
     private final Rectangle screenRect;
     private final UniverseService universeService;
@@ -649,9 +651,17 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                         logger.warn("Interrupted while waiting after stopping threads");
                     }
 
-                    // Full stop, then exit
+                    // Deploy heatsink, full stop, then exit
                     this.robot.mouseMove(1, 1);
+                    if (!REASON_END_OF_PLOTTED_ROUTE.equals(reason)) {
+                        this.shipControl.deployHeatsink();
+                    }
                     this.shipControl.fullStop();
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        logger.warn("Interrupted while waiting after stopping ship");
+                    }
                     this.shipControl.exitToMainMenu();
 
                     // Wait until we are at the main menu
@@ -1130,7 +1140,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
     public void onNewJournalEntry(AbstractJournalEvent event) {
         if (event instanceof MusicEvent) {
             if (MusicEvent.TRACK_DESTINATION_FROM_HYPERSPACE.equals(((MusicEvent) event).getMusicTrack()) && event.getTimestamp().isAfter(ZonedDateTime.now().minusMinutes(1))) {
-                this.doEmergencyExit("End of plotted route");
+                this.doEmergencyExit(REASON_END_OF_PLOTTED_ROUTE);
             }
         } else if (event instanceof StartJumpEvent) {
             this.shipControl.stopTurning();
@@ -1280,8 +1290,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         if (CruiseControlApplication.CREDITS_MODE) {
             return this.sysmapScannerResult.getBodies().stream().filter( //
                     b -> b.unexplored && // Of course only unexplored
-                            ((b.distanceLs != null && ((SysmapBody.estimatePayout(b) >= 200000 && b.distanceLs.intValue() < 23456)
-                                    || (SysmapBody.estimatePayout(b) >= 500000 && b.distanceLs.intValue() < 56789)))))
+                    ((b.distanceLs != null && ((SysmapBody.estimatePayout(b) >= 200000 && b.distanceLs.intValue() < 23456)
+                            || (SysmapBody.estimatePayout(b) >= 500000 && b.distanceLs.intValue() < 56789)))))
                     .sorted(new SensibleScanOrderComparator()).findFirst().orElse(null);
         } else {
             final boolean alreadyScannedStar = false; //this.currentSystemScannedBodies.stream().filter(e -> StringUtils.isNotEmpty(e.getStarType())).findFirst().isPresent();
