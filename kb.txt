@@ -1,0 +1,36 @@
+EDSM query system:
+
+GET https://www.edsm.net/api-v1/system?systemName=Eoch%20Flyuae%20NT-H%20d10-12&showCoordinates=1
+
+RESPONSE: {"name":"Eoch Flyuae NT-H d10-12","coords":{"x":-8448.125,"y":-807.625,"z":17776.5625},"coordsLocked":false}
+
+---------------------------------------
+
+EDSM featured systems:
+
+GET https://www.edsm.net/api-v1/systems?onlyFeatured=1
+
+RESPONSE [{"name":"Blu Euq II-V b43-5"},{"name":"Blu Euq PJ-I d9-52"},{"name":"Blu Euq PJ-I d9-44"},{"name":"Blu Euq PL-W b56-1"},{"name":"Blu Euq JO-K b49-13"},{"name":"Blu Euq ZM-D b53-3"},{"name":"Blu Euq JO-Z d13-107"},{"name":"Blu Euq UA-Q b46-14"},{"name":"Blu Euq LD-K d8-224"},{"name":"Blu Euq HZ-Z b54-3"},{"name":"Blu Euq TS-X b28-0"},{"name":"Bleae Thaa UL-O b6-3"},{"name":"Byeia Euq FA-A b20"},{"name":"Pyraea Eur MD-R b18-0"},{"name":"Blu Euq PJ-I d9-254"},{"name":"Blu Euq XX-S b58-4"},{"name":"Pyraea Eur AF-R d4-2"},{"name":"Prieluia WO-Z b30-2"},{"name":"Eeshorks RX-T b19-41"},{"name":"Greae Hypai GB-Y c16-66"}]
+
+---------------------------------------
+
+EDSM submit distances:
+
+# api-v1/submit-distances?commanderName=" + urlEncode(commanderName) + "&apiKey=" + apiKey
+api-v1/submit-distances
+
+{ 
+	"data" : {
+		"ver" : 2,
+		"commander" : "Mokel DeLorean [GPL]",
+		"fromSoftware" : "EDCC",
+		"fromSoftwareVersion" : "1.0.0",
+		"p0" : {
+			"name" : "fromSystemName"
+		},
+		"refs" : [ 
+			{ "name" : "toSystemName", "dist" : "0.00" },
+			...
+		]
+	}
+}
