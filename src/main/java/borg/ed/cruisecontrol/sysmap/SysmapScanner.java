@@ -732,20 +732,20 @@ public class SysmapScanner {
 		}
 
 		TemplateMatch mUnexplored = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 420, 0, 1920 - 420, 1080, refUnexplored);
-		logger.debug("Best UNEXPLORED match = " + mUnexplored.getErrorPerPixel());
+		logger.trace("Best UNEXPLORED match = " + mUnexplored.getErrorPerPixel());
 		if (mUnexplored.getErrorPerPixel() > 0.05f) {
 			return false;
 		} else {
 			b.unexplored = true;
 
 			TemplateMatch mArrivalPoint = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, mUnexplored.getX() - 20, mUnexplored.getY() + 20, 170, 55, refArrivalPoint);
-			logger.debug("Best ARRIVAL POINT match = " + mArrivalPoint.getErrorPerPixel());
+			logger.trace("Best ARRIVAL POINT match = " + mArrivalPoint.getErrorPerPixel());
 			TemplateMatch mSolarMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refSolarMasses);
-			logger.debug("Best SOLAR MASSES match = " + mSolarMasses.getErrorPerPixel());
+			logger.trace("Best SOLAR MASSES match = " + mSolarMasses.getErrorPerPixel());
 			TemplateMatch mMoonMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refMoonMasses);
-			logger.debug("Best MOON MASSES match = " + mMoonMasses.getErrorPerPixel());
+			logger.trace("Best MOON MASSES match = " + mMoonMasses.getErrorPerPixel());
 			TemplateMatch mEarthMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refEarthMasses);
-			logger.debug("Best EARTH MASSES match = " + mEarthMasses.getErrorPerPixel());
+			logger.trace("Best EARTH MASSES match = " + mEarthMasses.getErrorPerPixel());
 
 			if (mArrivalPoint.getErrorPerPixel() <= 0.05f) {
 				int apX0 = Math.min(b.grayDebugImage.width - 1, mArrivalPoint.getX() + mArrivalPoint.getWidth());
@@ -753,7 +753,7 @@ public class SysmapScanner {
 				int apX1 = Math.min(b.grayDebugImage.width - 1, apX0 + 225);
 				int apY1 = Math.min(b.grayDebugImage.height - 1, apY0 + 30);
 				String arrivalPointText = this.scanText(b.grayDebugImage.subimage(apX0, apY0, apX1, apY1), textTemplates);
-				logger.debug("...arrivalPointText='" + arrivalPointText + "'");
+				logger.trace("...arrivalPointText='" + arrivalPointText + "'");
 				Pattern p = Pattern.compile(".*?(\\d+.*\\d+.*LS).*?");
 				Matcher m = p.matcher(arrivalPointText);
 				if (m.matches()) {
@@ -774,7 +774,7 @@ public class SysmapScanner {
 				int emX1 = Math.min(b.grayDebugImage.width - 1, emX0 + 250);
 				int emY1 = Math.min(b.grayDebugImage.height - 1, emY0 + 30);
 				String solarMassesText = this.scanText(b.grayDebugImage.subimage(emX0, emY0, emX1, emY1), textTemplates);
-				logger.debug("...solarMassesText='" + solarMassesText + "'");
+				logger.trace("...solarMassesText='" + solarMassesText + "'");
 				Pattern p = Pattern.compile(".*?(\\d+.*\\d+).*?");
 				Matcher m = p.matcher(solarMassesText);
 				if (m.matches()) {
@@ -795,7 +795,7 @@ public class SysmapScanner {
 				int emX1 = Math.min(b.grayDebugImage.width - 1, emX0 + 250);
 				int emY1 = Math.min(b.grayDebugImage.height - 1, emY0 + 30);
 				String moonMassesText = this.scanText(b.grayDebugImage.subimage(emX0, emY0, emX1, emY1), textTemplates);
-				logger.debug("...moonMassesText='" + moonMassesText + "'");
+				logger.trace("...moonMassesText='" + moonMassesText + "'");
 				Pattern p = Pattern.compile(".*?(\\d+.*\\d+).*?");
 				Matcher m = p.matcher(moonMassesText);
 				if (m.matches()) {
@@ -816,7 +816,7 @@ public class SysmapScanner {
 				int emX1 = Math.min(b.grayDebugImage.width - 1, emX0 + 250);
 				int emY1 = Math.min(b.grayDebugImage.height - 1, emY0 + 30);
 				String earthMassesText = this.scanText(b.grayDebugImage.subimage(emX0, emY0, emX1, emY1), textTemplates);
-				logger.debug("...earthMassesText='" + earthMassesText + "'");
+				logger.trace("...earthMassesText='" + earthMassesText + "'");
 				Pattern p = Pattern.compile(".*?(\\d+.*\\d+).*?");
 				Matcher m = p.matcher(earthMassesText);
 				if (m.matches()) {
@@ -830,14 +830,14 @@ public class SysmapScanner {
 				}
 
 				TemplateMatch mRadius = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, mEarthMasses.getX() - 2, mEarthMasses.getY() + 20, 170, 40, refRadius);
-				logger.debug("Best RADIUS match = " + mRadius.getErrorPerPixel());
+				logger.trace("Best RADIUS match = " + mRadius.getErrorPerPixel());
 				if (mRadius.getErrorPerPixel() <= 0.05f) {
 					int radX0 = Math.min(b.grayDebugImage.width - 1, mRadius.getX() + mRadius.getWidth());
 					int radY0 = Math.max(0, mRadius.getY() - 5);
 					int radX1 = Math.min(b.grayDebugImage.width - 1, radX0 + 300);
 					int radY1 = Math.min(b.grayDebugImage.height - 1, radY0 + 30);
 					String radiusText = this.scanText(b.grayDebugImage.subimage(radX0, radY0, radX1, radY1), textTemplates);
-					logger.debug("...radiusText='" + radiusText + "'");
+					logger.trace("...radiusText='" + radiusText + "'");
 					p = Pattern.compile(".*?(\\d+.*\\d+.*KM).*?");
 					m = p.matcher(radiusText);
 					if (m.matches()) {
