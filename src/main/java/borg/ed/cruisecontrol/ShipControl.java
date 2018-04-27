@@ -1,6 +1,7 @@
 package borg.ed.cruisecontrol;
 
 import java.awt.Robot;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 
 import org.slf4j.Logger;
@@ -30,6 +31,24 @@ public class ShipControl {
 
     public Robot getRobot() {
         return robot;
+    }
+
+    /**
+     * Sleeps between mouse move and click, but not before and after
+     */
+    public void leftClick(int xOnScreen, int yOnScreen) throws InterruptedException {
+        this.robot.mouseMove(xOnScreen, yOnScreen);
+        Thread.sleep(400 + (long) (Math.random() * 100));
+        this.leftClick();
+    }
+
+    /**
+     * Sleeps between button press and release, but not before and after
+     */
+    public void leftClick() throws InterruptedException {
+        this.robot.mousePress(InputEvent.getMaskForButton(1));
+        Thread.sleep(200 + (long) (Math.random() * 50));
+        this.robot.mouseRelease(InputEvent.getMaskForButton(1));
     }
 
     public void releaseAllKeys() {

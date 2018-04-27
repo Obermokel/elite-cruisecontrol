@@ -66,6 +66,8 @@ public class SysmapScanner {
     private TemplateRgb refUcLogo = null;
     private TemplateRgb refDetailsTabActive = null;
     private TemplateRgb refDetailsTabInactive = null;
+    private TemplateRgb refTargetButtonActive = null;
+    private TemplateRgb refTargetButtonInactive = null;
     private Template refUnexplored = null;
     private Template refArrivalPoint = null;
     private Template refSolarMasses = null;
@@ -583,26 +585,7 @@ public class SysmapScanner {
         SysmapBody rightmostBodyOnScreen = bodies.get(bodies.size() - 1);
 
         // Ensure details are visible
-        boolean detailsVisible = false;
-        while (!detailsVisible) {
-            Planar<GrayF32> rgb = null;
-            synchronized (this.screenConverterResult) {
-                this.screenConverterResult.wait();
-                rgb = this.screenConverterResult.getRgb().clone();
-            }
-            detailsVisible = TemplateMatcher.findBestMatchingLocationInRegion(rgb, 140, 120, 60, 55, this.refDetailsTabActive).getErrorPerPixel() <= 0.1f;
-            if (!detailsVisible) {
-                logger.debug("Details tab not visible");
-                TemplateMatchRgb m = TemplateMatcher.findBestMatchingLocationInRegion(rgb, 140, 120, 60, 55, this.refDetailsTabInactive);
-                Point p = mouseUtil.imageToScreen(new Point(m.getX() + m.getWidth() / 2, m.getY() + m.getHeight() / 2));
-                this.robot.mouseMove(p.x, p.y);
-                Thread.sleep(200);
-                this.robot.mousePress(InputEvent.getMaskForButton(1));
-                Thread.sleep(50);
-                this.robot.mouseRelease(InputEvent.getMaskForButton(1));
-                logger.debug("Clicked on details tab");
-            }
-        }
+        this.ensureDetailsTabIsVisible();
 
         for (SysmapBody b : bodies) {
             logger.debug("Extracting data for body" + bodies.indexOf(b));
@@ -637,7 +620,7 @@ public class SysmapScanner {
                 Thread.sleep(500);
                 this.robot.mouseMove((b.centerOnScreen.x - 5) + random.nextInt(10), (b.centerOnScreen.y - 5) + random.nextInt(10));
                 Thread.sleep(500);
-                while ((System.currentTimeMillis() - start) < 1500L) {
+                while ((System.currentTimeMillis() - start) < 4500L) {
                     Planar<GrayF32> rgb = null;
                     Planar<GrayF32> hsv = null;
                     synchronized (this.screenConverterResult) {
@@ -657,6 +640,65 @@ public class SysmapScanner {
                 }
             }
         }
+    }
+
+    public void ensureDetailsTabIsVisible() throws InterruptedException {
+        final Random random = new Random();
+        MouseUtil mouseUtil = new MouseUtil(this.screenRect.width, this.screenRect.height, CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
+
+        boolean detailsVisible = false;
+        while (!detailsVisible) {
+            Planar<GrayF32> rgb = null;
+            synchronized (this.screenConverterResult) {
+                this.screenConverterResult.wait();
+                rgb = this.screenConverterResult.getRgb().clone();
+            }
+            detailsVisible = TemplateMatcher.findBestMatchingLocationInRegion(rgb, 140, 120, 60, 55, this.refDetailsTabActive).getErrorPerPixel() <= 0.1f;
+            if (!detailsVisible) {
+                logger.debug("Details tab not visible");
+                TemplateMatchRgb m = TemplateMatcher.findBestMatchingLocationInRegion(rgb, 140, 120, 60, 55, this.refDetailsTabInactive);
+                Point p = mouseUtil.imageToScreen(new Point(m.getX() + m.getWidth() / 2, m.getY() + m.getHeight() / 2));
+                this.robot.mouseMove((p.x - 5) + random.nextInt(10), (p.y - 5) + random.nextInt(10));
+                Thread.sleep(200 + random.nextInt(50));
+                this.robot.mousePress(InputEvent.getMaskForButton(1));
+                Thread.sleep(150 + random.nextInt(50));
+                this.robot.mouseRelease(InputEvent.getMaskForButton(1));
+                logger.debug("Clicked on details tab");
+            }
+        }
+    }
+
+    public boolean clickOnTargetButton() throws InterruptedException {
+        final Random random = new Random();
+        MouseUtil mouseUtil = new MouseUtil(this.screenRect.width, this.screenRect.height, CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
+
+        boolean buttonClicked = false;
+        while (!buttonClicked) {
+            Planar<GrayF32> rgb = null;
+            synchronized (this.screenConverterResult) {
+                this.screenConverterResult.wait();
+                rgb = this.screenConverterResult.getRgb().clone();
+            }
+            TemplateMatchRgb mButton = TemplateMatcher.findBestMatchingLocation(rgb, this.refTargetButtonActive);
+            if (mButton.getErrorPerPixel() > 0.1f) {
+                mButton = TemplateMatcher.findBestMatchingLocation(rgb, this.refTargetButtonInactive);
+            }
+            if (mButton.getErrorPerPixel() > 0.1f) {
+                logger.debug("Target button not visible");
+            } else {
+                Point p = mouseUtil.imageToScreen(new Point(mButton.getX() + mButton.getWidth() / 2, mButton.getY() + mButton.getHeight() / 2));
+                this.robot.mouseMove((p.x - 5) + random.nextInt(10), (p.y - 5) + random.nextInt(10));
+                Thread.sleep(200 + random.nextInt(50));
+                this.robot.mousePress(InputEvent.getMaskForButton(1));
+                Thread.sleep(150 + random.nextInt(50));
+                this.robot.mouseRelease(InputEvent.getMaskForButton(1));
+                buttonClicked = true;
+                logger.debug("Clicked on target button");
+                break;
+            }
+        }
+
+        return buttonClicked;
     }
 
     /**
@@ -857,6 +899,8 @@ public class SysmapScanner {
             this.refUcLogo = TemplateRgb.fromFile(new File(refDir, "uc_logo.png"));
             this.refDetailsTabActive = TemplateRgb.fromFile(new File(refDir, "sysmap_details_tab_active.png"));
             this.refDetailsTabInactive = TemplateRgb.fromFile(new File(refDir, "sysmap_details_tab_inactive.png"));
+            this.refTargetButtonActive = TemplateRgb.fromFile(new File(refDir, "sysmap_target_button_active.png"));
+            this.refTargetButtonInactive = TemplateRgb.fromFile(new File(refDir, "sysmap_target_button_inactive.png"));
             this.refUnexplored = Template.fromFile(new File(refDir, "unexplored2.png"));
             this.refArrivalPoint = Template.fromFile(new File(refDir, "arrival_point.png"));
             this.refSolarMasses = Template.fromFile(new File(refDir, "solar_masses.png"));

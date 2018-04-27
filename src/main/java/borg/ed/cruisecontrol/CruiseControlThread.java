@@ -3,10 +3,9 @@ package borg.ed.cruisecontrol;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Robot;
-import java.awt.event.InputEvent;
-import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -193,7 +192,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 brightnessAhead = this.computeBrightnessAhead(brightImage);
                 TemplateMatch compassDotMatch = this.searchForCompassAndTarget(orangeHudImage, yellowHudImage, blueWhiteHudImage, threadPool);
                 this.searchForSixSecondsOrScanning(orangeHudImage, yellowHudImage);
-                this.handleGameState(rgb, hsv, orangeHudImage, compassDotMatch);
+                this.handleGameState(rgb, hsv, orangeHudImage, compassDotMatch, screenConverterResult);
                 // <<<< PROCESSING THE DATA <<<<
 
                 // >>>> DEBUG IMAGE >>>>
@@ -301,7 +300,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         }
     }
 
-    private void handleGameState(Planar<GrayF32> rgb, Planar<GrayF32> hsv, GrayF32 orangeHudImage, TemplateMatch compassDotMatch) throws InterruptedException {
+    private void handleGameState(Planar<GrayF32> rgb, Planar<GrayF32> hsv, GrayF32 orangeHudImage, TemplateMatch compassDotMatch, ScreenConverterResult screenConverterResult)
+            throws InterruptedException {
         switch (this.gameState) {
             case UNKNOWN:
                 this.shipControl.releaseAllKeys();
@@ -446,7 +446,20 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                         logger.debug("System map scanned, no body to scan, aligning to next jump target at 100% throttle");
                     } else {
                         // Select body from sysmap, then close map and wait for ship HUD
-                        this.clickOnNextBodyOnSystemMap();
+                        if (!this.clickOnNextBodyOnSystemMap(screenConverterResult)) {
+                            this.currentSysmapBody.unexplored = false; // Mark as explored
+                            if (this.nextBodyToScan() != null) {
+                                this.gameState = GameState.WAIT_FOR_SYSTEM_MAP; // Choose next body
+                                break;
+                            } else {
+                                logger.debug("Close system map");
+                                this.shipControl.toggleSystemMap();
+                                this.shipControl.setThrottle(100);
+                                this.shipControl.selectNextSystemInRoute();
+                                this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+                                logger.debug("All bodies scanned, aligning to next jump target at 100% throttle");
+                            }
+                        }
                         logger.debug("Close system map");
                         this.shipControl.toggleSystemMap();
                         this.shipControl.setThrottle(0);
@@ -563,7 +576,20 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
                 break;
             case WAIT_FOR_SYSTEM_MAP:
                 if (this.sysmapScanner.isUniversalCartographicsLogoVisible(rgb)) {
-                    this.clickOnNextBodyOnSystemMap();
+                    if (!this.clickOnNextBodyOnSystemMap(screenConverterResult)) {
+                        this.currentSysmapBody.unexplored = false; // Mark as explored
+                        if (this.nextBodyToScan() != null) {
+                            this.gameState = GameState.WAIT_FOR_SYSTEM_MAP; // Choose next body
+                            break;
+                        } else {
+                            logger.debug("Close system map");
+                            this.shipControl.toggleSystemMap();
+                            this.shipControl.setThrottle(100);
+                            this.shipControl.selectNextSystemInRoute();
+                            this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+                            logger.debug("All bodies scanned, aligning to next jump target at 100% throttle");
+                        }
+                    }
                     logger.debug("Close system map");
                     this.shipControl.toggleSystemMap();
                     this.shipControl.setThrottle(0);
@@ -1242,47 +1268,93 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
         }
     }
 
-    private void clickOnNextBodyOnSystemMap() {
+    private boolean clickOnNextBodyOnSystemMap(ScreenConverterResult screenConverterResult) {
+        final long start = System.currentTimeMillis();
+        final Random random = new Random();
         this.currentSysmapBody = this.nextBodyToScan();
+        SysmapBody b = this.currentSysmapBody;
+
+        SysmapBody hovered = new SysmapBody(new Rectangle(b.areaInImage));
+        hovered.centerOnScreen = new Point(b.centerOnScreen);
 
         try {
-            Thread.sleep(1000); // TODO Necessary?
+            this.sysmapScanner.ensureDetailsTabIsVisible();
 
-            Random random = new Random();
+            // Hover over body, wait until data is displayed and extract
+            this.robot.mouseMove((b.centerOnScreen.x - 5) + random.nextInt(10), (b.centerOnScreen.y - 5) + random.nextInt(10));
+            Thread.sleep(250 + random.nextInt(250));
+            while ((System.currentTimeMillis() - start) < 1500L) {
+                Planar<GrayF32> rgb = null;
+                Planar<GrayF32> hsv = null;
+                synchronized (screenConverterResult) {
+                    screenConverterResult.wait();
+                    rgb = screenConverterResult.getRgb().clone();
+                    hsv = screenConverterResult.getHsv().clone();
+                }
+                if (this.sysmapScanner.extractBodyData(rgb, hsv, hovered)) {
+                    break;
+                }
+            }
 
-            // Click on body
-            this.robot.mouseMove((this.currentSysmapBody.centerOnScreen.x - 5) + random.nextInt(10), (this.currentSysmapBody.centerOnScreen.y - 5) + random.nextInt(10));
-            Thread.sleep(100);
-            this.robot.mouseMove((this.currentSysmapBody.centerOnScreen.x - 5) + random.nextInt(10), (this.currentSysmapBody.centerOnScreen.y - 5) + random.nextInt(10));
-            Thread.sleep(100);
-            this.robot.mousePress(InputEvent.getMaskForButton(1));
-            Thread.sleep(100);
-            this.robot.mouseRelease(InputEvent.getMaskForButton(1));
+            // Check
+            if (!hovered.hasSameData(b)) {
+                final Point p0 = new Point(0, 0);
+                SysmapBody leftmostBody = this.sysmapScannerResult.getBodies().stream()
+                        .sorted((b1, b2) -> new Double(b1.centerOnScreen.distance(p0)).compareTo(new Double(b2.centerOnScreen.distance(p0)))).findFirst().orElse(null);
+                this.robot.mouseMove((leftmostBody.centerOnScreen.x - 5) + random.nextInt(10), (leftmostBody.centerOnScreen.y - 5) + random.nextInt(10));
+                Thread.sleep(250 + random.nextInt(250));
 
-            Thread.sleep(2000); // Wait for map to scroll
-            this.robot.mouseMove(this.screenRect.width / 2, this.screenRect.height / 2); // Move mouse to now centered planet
-            Thread.sleep(500); // Wait for tooltip to appear
+                // Try again
+                this.robot.mouseMove((b.centerOnScreen.x - 5) + random.nextInt(10), (b.centerOnScreen.y - 5) + random.nextInt(10));
+                Thread.sleep(250 + random.nextInt(250));
+                while ((System.currentTimeMillis() - start) < 4500L) {
+                    Planar<GrayF32> rgb = null;
+                    Planar<GrayF32> hsv = null;
+                    synchronized (screenConverterResult) {
+                        screenConverterResult.wait();
+                        rgb = screenConverterResult.getRgb().clone();
+                        hsv = screenConverterResult.getHsv().clone();
+                    }
+                    if (this.sysmapScanner.extractBodyData(rgb, hsv, hovered)) {
+                        break;
+                    }
+                }
+            }
 
-            // Select as target (ENTER, scroll right, scroll left, ENTER again)
-            this.robot.keyPress(KeyEvent.VK_ENTER);
-            Thread.sleep(100);
-            this.robot.keyRelease(KeyEvent.VK_ENTER);
-            Thread.sleep(200);
-            this.robot.keyPress(KeyEvent.VK_NUMPAD6);
-            Thread.sleep(100);
-            this.robot.keyRelease(KeyEvent.VK_NUMPAD6);
-            Thread.sleep(200);
-            this.robot.keyPress(KeyEvent.VK_NUMPAD4);
-            Thread.sleep(500);
-            this.robot.keyRelease(KeyEvent.VK_NUMPAD4);
-            Thread.sleep(200);
-            this.robot.keyPress(KeyEvent.VK_ENTER);
-            Thread.sleep(100);
-            this.robot.keyRelease(KeyEvent.VK_ENTER);
+            // Check again
+            if (!hovered.hasSameData(b)) {
+                logger.warn("Did not find " + b + " in sysmap, instead found " + hovered);
+                return false;
+            } else {
+                // TODO Might click on target button directly from here? Why first click on body and scroll map?
+                this.shipControl.leftClick(); // Click on body
+                Thread.sleep(1500 + random.nextInt(500)); // Wait for map to scroll
+                this.robot.mouseMove(this.screenRect.width / 2, this.screenRect.height / 2); // Move mouse to now centered planet
+                Thread.sleep(250 + random.nextInt(250));
+                while ((System.currentTimeMillis() - start) < 10000L) {
+                    Planar<GrayF32> rgb = null;
+                    Planar<GrayF32> hsv = null;
+                    synchronized (screenConverterResult) {
+                        screenConverterResult.wait();
+                        rgb = screenConverterResult.getRgb().clone();
+                        hsv = screenConverterResult.getHsv().clone();
+                    }
+                    hovered.clearData();
+                    if (this.sysmapScanner.extractBodyData(rgb, hsv, hovered)) {
+                        break;
+                    }
+                }
 
-            Thread.sleep(1000); // TODO Necessary?
+                if (!hovered.hasSameData(b)) {
+                    logger.warn("Did not find " + b + " in sysmap after scrolling to it, instead found " + hovered);
+                    return false;
+                } else {
+                    return this.sysmapScanner.clickOnTargetButton();
+                }
+            }
         } catch (InterruptedException e) {
             logger.warn("Interrupted while clicking on system map", e);
+            return false;
         }
     }
 
