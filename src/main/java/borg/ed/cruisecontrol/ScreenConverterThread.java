@@ -113,6 +113,8 @@ public class ScreenConverterThread extends Thread {
 
 				if (v >= 0.85f) {
 					brightImage.unsafe_set(x, y, v);
+				} else if (v >= 0.25f && s >= 0.75f && h >= 5.5f && h <= 6.0f) { // Brown dwarf stars...
+					brightImage.unsafe_set(x, y, v);
 				} else {
 					brightImage.unsafe_set(x, y, 0);
 				}

@@ -41,6 +41,7 @@ import borg.ed.cruisecontrol.templatematching.Template;
 import borg.ed.cruisecontrol.templatematching.TemplateMatch;
 import borg.ed.cruisecontrol.templatematching.TemplateMatcher;
 import borg.ed.cruisecontrol.util.ImageUtil;
+import borg.ed.universe.constants.StarClass;
 import borg.ed.universe.journal.JournalReaderThread;
 import borg.ed.universe.journal.JournalUpdateListener;
 import borg.ed.universe.journal.Status;
@@ -94,6 +95,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private boolean fsdCharging = false;
 	private long fsdChargingSince = Long.MAX_VALUE;
 	private long getInScoopingRangeSince = Long.MAX_VALUE;
+	private boolean jumpTargetIsScoopable = false;
 	private String currentSystemName = "";
 	private List<Body> currentSystemKnownBodies = new ArrayList<>();
 	private List<ScanEvent> currentSystemScannedBodies = new ArrayList<>();
@@ -1157,9 +1159,14 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			}
 
 			if (status.isFsdCooldown() && !this.fsdCooldown && this.gameState == GameState.WAIT_FOR_FSD_COOLDOWN) {
-				this.gameState = GameState.GET_IN_SCOOPING_RANGE;
-				this.getInScoopingRangeSince = System.currentTimeMillis();
-				logger.debug("FSD cooldown started, getting in scooping range");
+				if (!this.jumpTargetIsScoopable) {
+					this.gameState = GameState.ALIGN_TO_STAR_ESCAPE;
+					logger.debug("Jumped in at a non-scoopable star, directly aligning to star escape vector");
+				} else {
+					this.gameState = GameState.GET_IN_SCOOPING_RANGE;
+					this.getInScoopingRangeSince = System.currentTimeMillis();
+					logger.debug("FSD cooldown started, getting in scooping range");
+				}
 			}
 
 			if (status.isFsdCharging() && !this.fsdCharging) {
@@ -1190,6 +1197,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			this.sysmapScannerResult = null;
 			this.lastScannedBodyAt = 0;
 			this.lastScannedBodyDistanceFromArrival = 0;
+			this.jumpTargetIsScoopable = StarClass.fromJournalValue(((StartJumpEvent) event).getStarClass()).isScoopable();
 			this.gameState = GameState.IN_HYPERSPACE;
 			logger.debug("Jumping through hyperspace to " + ((StartJumpEvent) event).getStarSystem());
 		} else if (event instanceof FSDJumpEvent) {
