@@ -1,6 +1,5 @@
 package borg.ed.cruisecontrol.sysmap;
 
-import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Point;
@@ -39,7 +38,6 @@ import boofcv.core.image.ConvertImage;
 import boofcv.factory.shape.ConfigEllipseDetector;
 import boofcv.factory.shape.FactoryShapeDetector;
 import boofcv.gui.binary.VisualizeBinaryData;
-import boofcv.gui.feature.VisualizeShapes;
 import boofcv.io.image.ConvertBufferedImage;
 import boofcv.struct.image.GrayF32;
 import boofcv.struct.image.GrayU8;
@@ -138,7 +136,7 @@ public class SysmapScanner {
 			GrayF32 gray = ConvertImage.average(rgb, null);
 			//            try {
 			//                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(gray), null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 000_gray " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 000_gray " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -147,7 +145,7 @@ public class SysmapScanner {
 			ThresholdImageOps.threshold(gray, binary, 0.50f, false);
 			//            try {
 			//                BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 010_binary " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 010_binary " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -155,7 +153,7 @@ public class SysmapScanner {
 			binary = BinaryImageOps.erode8(binary, 2, null);
 			//            try {
 			//                BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 020_eroded " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 020_eroded " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -163,7 +161,7 @@ public class SysmapScanner {
 			binary = BinaryImageOps.dilate4(binary, 2, null);
 			//            try {
 			//                BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 030_dilated " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 030_dilated " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -198,20 +196,20 @@ public class SysmapScanner {
 			}
 			logger.debug("Kept " + bigCircles.size() + " big circle(s) of " + ellipses.size + " total ellipse(s)");
 
-			try {
-				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
-				Graphics2D g2 = debugImage.createGraphics();
-				g2.setStroke(new BasicStroke(3));
-				g2.setColor(Color.GREEN);
-				for (EllipseRotated_F64 bc : bigCircles) {
-					VisualizeShapes.drawEllipse(bc, g2);
-					g2.drawString(String.format(Locale.US, "%.6f", bc.a / bc.b), (int) bc.center.x, (int) bc.center.y);
-				}
-				g2.dispose();
-				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 098_bigCircles " + systemName + ".png"));
-			} catch (IOException e1) {
-				e1.printStackTrace();
-			}
+			//			try {
+			//				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
+			//				Graphics2D g2 = debugImage.createGraphics();
+			//				g2.setStroke(new BasicStroke(3));
+			//				g2.setColor(Color.GREEN);
+			//				for (EllipseRotated_F64 bc : bigCircles) {
+			//					VisualizeShapes.drawEllipse(bc, g2);
+			//					g2.drawString(String.format(Locale.US, "%.6f", bc.a / bc.b), (int) bc.center.x, (int) bc.center.y);
+			//				}
+			//				g2.dispose();
+			//				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 098_bigCircles " + systemName + ".png"));
+			//			} catch (IOException e1) {
+			//				e1.printStackTrace();
+			//			}
 
 			// Overwrite the found ones with black
 			// TODO alpha
@@ -225,7 +223,7 @@ public class SysmapScanner {
 			tmpG.dispose();
 			Planar<GrayF32> overwrittenRgb = ImageUtil.normalize255(ConvertBufferedImage.convertFromMulti(tmpBI, null, true, GrayF32.class));
 			//            try {
-			//                ImageIO.write(tmpBI, "PNG", new File(debugFolder, "DEBUG " + ts + " 099_overwrittenRgb " + systemName + ".png"));
+			//                ImageIO.write(tmpBI, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 099_overwrittenRgb " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -234,7 +232,7 @@ public class SysmapScanner {
 			GrayF32 overwrittenGray = ConvertImage.average(overwrittenRgb, null);
 			//            try {
 			//                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(overwrittenGray), null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 100_overwrittenGray " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 100_overwrittenGray " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -258,7 +256,7 @@ public class SysmapScanner {
 			}
 			//            try {
 			//                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(noArcsGray), null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 110_noArcsGray " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 110_noArcsGray " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -268,7 +266,7 @@ public class SysmapScanner {
 			amplified = GrayImageOps.stretch(amplified, 6.0f, 0.0f, 1.0f, null);
 			//            try {
 			//                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(amplified), null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 120_amplified " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 120_amplified " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -277,7 +275,7 @@ public class SysmapScanner {
 			GrayF32 blurred = GBlurImageOps.gaussian(amplified, null, -1, 13, null);
 			//            try {
 			//                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(blurred), null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 130_blurred " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 130_blurred " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -287,7 +285,7 @@ public class SysmapScanner {
 			ThresholdImageOps.threshold(blurred, thresholded, 0.5f, false);
 			//            try {
 			//                BufferedImage debugImage = VisualizeBinaryData.renderBinary(thresholded, false, null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 140_thresholded " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 140_thresholded " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -316,24 +314,24 @@ public class SysmapScanner {
 			}
 			logger.debug("Kept " + brightCircles.size() + " bright circle(s) of " + ellipses.size + " total ellipse(s)");
 
-			try {
-				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
-				Graphics2D g2 = debugImage.createGraphics();
-				g2.setStroke(new BasicStroke(3));
-				g2.setColor(Color.GREEN);
-				for (EllipseRotated_F64 bc : bigCircles) {
-					VisualizeShapes.drawEllipse(bc, g2);
-					g2.drawString(String.format(Locale.US, "%.1f / %.1f = %.6f", bc.a, bc.b, bc.a / bc.b), (int) bc.center.x, (int) bc.center.y);
-				}
-				for (EllipseRotated_F64 se : brightCircles) {
-					VisualizeShapes.drawEllipse(se, g2);
-					g2.drawString(String.format(Locale.US, "%.1f", se.a / se.b), (int) se.center.x, (int) se.center.y);
-				}
-				g2.dispose();
-				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 198_brightCircles " + systemName + ".png"));
-			} catch (IOException e1) {
-				e1.printStackTrace();
-			}
+			//			try {
+			//				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
+			//				Graphics2D g2 = debugImage.createGraphics();
+			//				g2.setStroke(new BasicStroke(3));
+			//				g2.setColor(Color.GREEN);
+			//				for (EllipseRotated_F64 bc : bigCircles) {
+			//					VisualizeShapes.drawEllipse(bc, g2);
+			//					g2.drawString(String.format(Locale.US, "%.1f / %.1f = %.6f", bc.a, bc.b, bc.a / bc.b), (int) bc.center.x, (int) bc.center.y);
+			//				}
+			//				for (EllipseRotated_F64 se : brightCircles) {
+			//					VisualizeShapes.drawEllipse(se, g2);
+			//					g2.drawString(String.format(Locale.US, "%.1f", se.a / se.b), (int) se.center.x, (int) se.center.y);
+			//				}
+			//				g2.dispose();
+			//				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 198_brightCircles " + systemName + ".png"));
+			//			} catch (IOException e1) {
+			//				e1.printStackTrace();
+			//			}
 
 			// Overwrite the found ones with black
 			// TODO alpha
@@ -350,7 +348,7 @@ public class SysmapScanner {
 			tmpG.dispose();
 			overwrittenRgb = ImageUtil.normalize255(ConvertBufferedImage.convertFromMulti(tmpBI, null, true, GrayF32.class));
 			//            try {
-			//                ImageIO.write(tmpBI, "PNG", new File(debugFolder, "DEBUG " + ts + " 199_overwrittenRgb " + systemName + ".png"));
+			//                ImageIO.write(tmpBI, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 199_overwrittenRgb " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -359,7 +357,7 @@ public class SysmapScanner {
 			overwrittenGray = ConvertImage.average(overwrittenRgb, null);
 			//            try {
 			//                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(overwrittenGray), null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 200_overwrittenGray " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 200_overwrittenGray " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -383,7 +381,7 @@ public class SysmapScanner {
 			}
 			//            try {
 			//                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(noArcsGray), null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 210_noArcsGray " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 210_noArcsGray " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -393,7 +391,7 @@ public class SysmapScanner {
 			amplified = GrayImageOps.stretch(amplified, 999999.9f, 0.0f, 1.0f, null);
 			//            try {
 			//                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(amplified), null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 220_amplified " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 220_amplified " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -402,7 +400,7 @@ public class SysmapScanner {
 			blurred = GBlurImageOps.gaussian(amplified, null, -1, 17, null);
 			//            try {
 			//                BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(blurred), null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 230_blurred " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 230_blurred " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -412,7 +410,7 @@ public class SysmapScanner {
 			ThresholdImageOps.threshold(blurred, thresholded, 0.5f, false);
 			//            try {
 			//                BufferedImage debugImage = VisualizeBinaryData.renderBinary(thresholded, false, null);
-			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 240_thresholded " + systemName + ".png"));
+			//                ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 240_thresholded " + systemName + ".png"));
 			//            } catch (IOException e1) {
 			//                e1.printStackTrace();
 			//            }
@@ -441,28 +439,28 @@ public class SysmapScanner {
 			}
 			logger.debug("Kept " + brightCircles.size() + " dark circle(s) of " + ellipses.size + " total ellipse(s)");
 
-			try {
-				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
-				Graphics2D g2 = debugImage.createGraphics();
-				g2.setStroke(new BasicStroke(3));
-				g2.setColor(Color.GREEN);
-				for (EllipseRotated_F64 bc : bigCircles) {
-					VisualizeShapes.drawEllipse(bc, g2);
-					g2.drawString(String.format(Locale.US, "%.1f / %.1f = %.6f", bc.a, bc.b, bc.a / bc.b), (int) bc.center.x, (int) bc.center.y);
-				}
-				for (EllipseRotated_F64 se : brightCircles) {
-					VisualizeShapes.drawEllipse(se, g2);
-					g2.drawString(String.format(Locale.US, "%.1f", se.a / se.b), (int) se.center.x, (int) se.center.y);
-				}
-				for (EllipseRotated_F64 se : darkCircles) {
-					VisualizeShapes.drawEllipse(se, g2);
-					g2.drawString(String.format(Locale.US, "%.1f", se.a / se.b), (int) se.center.x, (int) se.center.y);
-				}
-				g2.dispose();
-				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 298_darkCircles " + systemName + ".png"));
-			} catch (IOException e1) {
-				e1.printStackTrace();
-			}
+			//			try {
+			//				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
+			//				Graphics2D g2 = debugImage.createGraphics();
+			//				g2.setStroke(new BasicStroke(3));
+			//				g2.setColor(Color.GREEN);
+			//				for (EllipseRotated_F64 bc : bigCircles) {
+			//					VisualizeShapes.drawEllipse(bc, g2);
+			//					g2.drawString(String.format(Locale.US, "%.1f / %.1f = %.6f", bc.a, bc.b, bc.a / bc.b), (int) bc.center.x, (int) bc.center.y);
+			//				}
+			//				for (EllipseRotated_F64 se : brightCircles) {
+			//					VisualizeShapes.drawEllipse(se, g2);
+			//					g2.drawString(String.format(Locale.US, "%.1f", se.a / se.b), (int) se.center.x, (int) se.center.y);
+			//				}
+			//				for (EllipseRotated_F64 se : darkCircles) {
+			//					VisualizeShapes.drawEllipse(se, g2);
+			//					g2.drawString(String.format(Locale.US, "%.1f", se.a / se.b), (int) se.center.x, (int) se.center.y);
+			//				}
+			//				g2.dispose();
+			//				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 298_darkCircles " + systemName + ".png"));
+			//			} catch (IOException e1) {
+			//				e1.printStackTrace();
+			//			}
 
 			//			// Detect contours
 			//			List<Contour> contours = BinaryImageOps.contour(binary, ConnectRule.EIGHT, null);
@@ -542,7 +540,7 @@ public class SysmapScanner {
 					}
 				}
 				g2.dispose();
-				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " 299_result " + systemName + ".png"));
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " 299_result " + systemName + ".png"));
 			} catch (IOException e1) {
 				e1.printStackTrace();
 			}
@@ -997,7 +995,8 @@ public class SysmapScanner {
 			if (this.isWriteDebugImageRgbOriginal() || this.isWriteDebugImageRgbResult()) {
 				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
 				if (this.isWriteDebugImageRgbOriginal()) {
-					ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " sysmap_overview 00 rgb_original #" + systemName + ".png"));
+					ImageIO.write(debugImage, "PNG",
+							new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " sysmap_overview 00 rgb_original #" + systemName + ".png"));
 				}
 				if (this.isWriteDebugImageRgbResult()) {
 					Graphics2D g = debugImage.createGraphics();
@@ -1016,18 +1015,20 @@ public class SysmapScanner {
 						}
 					}
 					g.dispose();
-					ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " sysmap_overview 03 rgb_result #" + systemName + ".png"));
+					ImageIO.write(debugImage, "PNG",
+							new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " sysmap_overview 03 rgb_result #" + systemName + ".png"));
 				}
 			}
 
 			if (this.isWriteDebugImageGray()) {
 				BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(gray), null);
-				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " sysmap_overview 01 gray #" + systemName + ".png"));
+				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " sysmap_overview 01 gray #" + systemName + ".png"));
 			}
 
 			if (this.isWriteDebugImageThreshold()) {
 				BufferedImage debugImage = VisualizeBinaryData.renderBinary(binary, false, null);
-				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " sysmap_overview 02 threshold #" + systemName + ".png"));
+				ImageIO.write(debugImage, "PNG",
+						new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " sysmap_overview 02 threshold #" + systemName + ".png"));
 			}
 
 			for (SysmapBody b : bodies) {
@@ -1052,7 +1053,8 @@ public class SysmapScanner {
 			if ((this.isWriteDebugImageBodyRgbOriginal() || this.isWriteDebugImageBodyRgbResult()) && b.rgbDebugImage != null) {
 				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(b.rgbDebugImage), null, true);
 				if (this.isWriteDebugImageBodyRgbOriginal()) {
-					ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " sysmap_body $" + bodyName + " 00 rgb_original #" + systemName + ".png"));
+					ImageIO.write(debugImage, "PNG",
+							new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " sysmap_body $" + bodyName + " 00 rgb_original #" + systemName + ".png"));
 				}
 				if (this.isWriteDebugImageBodyRgbResult()) {
 					Graphics2D g = debugImage.createGraphics();
@@ -1075,13 +1077,15 @@ public class SysmapScanner {
 						g.drawString(String.format(Locale.US, "radiusKm=%,.0f", b.radiusKm), b.areaInImage.x, b.areaInImage.y + 45);
 					}
 					g.dispose();
-					ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " sysmap_body $" + bodyName + " 02 rgb_result #" + systemName + ".png"));
+					ImageIO.write(debugImage, "PNG",
+							new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " sysmap_body $" + bodyName + " 02 rgb_result #" + systemName + ".png"));
 				}
 			}
 
 			if (this.isWriteDebugImageBodyGray() && b.grayDebugImage != null) {
 				BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(b.grayDebugImage), null);
-				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " sysmap_body $" + bodyName + " 01 gray #" + systemName + ".png"));
+				ImageIO.write(debugImage, "PNG",
+						new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " sysmap_body $" + bodyName + " 01 gray #" + systemName + ".png"));
 			}
 		} catch (IOException e) {
 			logger.warn("Failed to write debug image", e);

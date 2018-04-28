@@ -5,6 +5,8 @@ import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
 import java.awt.Robot;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.UIManager;
 
@@ -24,6 +26,9 @@ import borg.ed.universe.service.UniverseService;
 public class CruiseControlApplication {
 
 	private static final ApplicationContext APPCTX = new AnnotationConfigApplicationContext(CruiseControlApplication.class);
+
+	public static String myCommanderName = "Unknown Commander Name";
+	public static List<String> myWingMates = new ArrayList<>();
 
 	public static final int SCALED_WIDTH = 1920;
 	public static final int SCALED_HEIGHT = 1080;

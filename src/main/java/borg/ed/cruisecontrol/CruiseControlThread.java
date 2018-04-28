@@ -51,6 +51,7 @@ import borg.ed.universe.journal.events.AbstractJournalEvent;
 import borg.ed.universe.journal.events.DiscoveryScanEvent;
 import borg.ed.universe.journal.events.FSDJumpEvent;
 import borg.ed.universe.journal.events.FuelScoopEvent;
+import borg.ed.universe.journal.events.LoadGameEvent;
 import borg.ed.universe.journal.events.MusicEvent;
 import borg.ed.universe.journal.events.ScanEvent;
 import borg.ed.universe.journal.events.StartJumpEvent;
@@ -1310,6 +1311,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					logger.debug(((ScanEvent) event).getBodyName() + " scanned, waiting for system map at stand-still");
 				}
 			}
+		} else if (event instanceof LoadGameEvent) {
+			CruiseControlApplication.myCommanderName = ((LoadGameEvent) event).getCommander();
 		}
 	}
 
