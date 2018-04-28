@@ -53,6 +53,7 @@ import borg.ed.cruisecontrol.templatematching.TemplateMatcher;
 import borg.ed.cruisecontrol.templatematching.TemplateRgb;
 import borg.ed.cruisecontrol.util.ImageUtil;
 import borg.ed.cruisecontrol.util.MouseUtil;
+import borg.ed.universe.constants.PlanetClass;
 import georegression.struct.shapes.EllipseRotated_F64;
 
 public class SysmapScanner {
@@ -66,6 +67,7 @@ public class SysmapScanner {
 	private TemplateRgb refUcLogo = null;
 	private TemplateRgb refDetailsTabActive = null;
 	private TemplateRgb refDetailsTabInactive = null;
+	private TemplateRgb refTargetButton = null;
 	private TemplateRgb refTargetButtonActive = null;
 	private TemplateRgb refTargetButtonActiveHovered = null;
 	private TemplateRgb refTargetButtonInactive = null;
@@ -496,6 +498,9 @@ public class SysmapScanner {
 			}
 			logger.debug("Non-intersecting contours: " + bodies.size());
 
+			// Try to identify the body types
+			this.guessBodyTypes(bodies, rgb);
+
 			// If we have control over the computer move the mouse over the found locations to get distance information
 			if (!bodies.isEmpty() && this.robot != null && this.screenRect != null && this.screenConverterResult != null) {
 				try {
@@ -505,14 +510,15 @@ public class SysmapScanner {
 				}
 			}
 
-			// Try to identify the body types
-			this.guessBodyTypes(bodies, rgb);
 			try {
 				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
 				Graphics2D g2 = debugImage.createGraphics();
-				g2.setColor(Color.GREEN);
+				g2.setColor(new Color(0, 127, 0));
 				for (SysmapBody b : bodies) {
 					g2.drawRect(b.areaInImage.x, b.areaInImage.y, b.areaInImage.width, b.areaInImage.height);
+				}
+				g2.setColor(Color.GREEN);
+				for (SysmapBody b : bodies) {
 					if (b.distanceLs == null) {
 						g2.drawString("?.?? Ls", b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 15);
 					} else {
@@ -520,17 +526,19 @@ public class SysmapScanner {
 					}
 					if (b.bestBodyMatch == null) {
 						g2.drawString("???", b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 30);
+						g2.drawString("?.???%", b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 45);
 					} else {
 						g2.drawString(SysmapBody.getAbbreviatedType(b), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 30);
+						g2.drawString(String.format(Locale.US, "%.3f%%", b.bestBodyMatch.getErrorPerPixel() * 100), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 45);
 					}
 					if (b.earthMasses != null) {
-						g2.drawString(String.format(Locale.US, "%.4f Em", b.earthMasses), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 45);
+						g2.drawString(String.format(Locale.US, "%.4f Em", b.earthMasses), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 60);
 					} else if (b.solarMasses != null) {
-						g2.drawString(String.format(Locale.US, "%.4f Sm", b.solarMasses), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 45);
+						g2.drawString(String.format(Locale.US, "%.4f Sm", b.solarMasses), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 60);
 					} else if (b.moonMasses != null) {
-						g2.drawString(String.format(Locale.US, "%.4f Mm", b.moonMasses), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 45);
+						g2.drawString(String.format(Locale.US, "%.4f Mm", b.moonMasses), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 60);
 					} else {
-						g2.drawString("?.???? Xm", b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 45);
+						g2.drawString("?.???? Xm", b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 60);
 					}
 				}
 				g2.dispose();
@@ -549,10 +557,10 @@ public class SysmapScanner {
 	public void guessBodyTypes(SysmapScannerResult result) {
 		if (result != null) {
 			for (SysmapBody b : result.getBodies()) {
-				logger.debug("Guessing body type of " + b);
 				Planar<GrayF32> bodyImage = result.getRgb().subimage(b.areaInImage.x, b.areaInImage.y, b.areaInImage.x + b.areaInImage.width, b.areaInImage.y + b.areaInImage.height);
 				TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(bodyImage, this.refSysMapBodies);
 				b.bestBodyMatch = bestMatch;
+				logger.debug("Guessed body type of " + b + " to be " + bestMatch);
 			}
 		}
 	}
@@ -590,6 +598,20 @@ public class SysmapScanner {
 		this.ensureDetailsTabIsVisible();
 
 		for (SysmapBody b : bodies) {
+			if (CruiseControlApplication.CREDITS_MODE && b.bestBodyMatch != null) {
+				try {
+					PlanetClass planetClass = PlanetClass.fromJournalValue(b.bestBodyMatch.getTemplate().getName());
+					if (planetClass == PlanetClass.EARTHLIKE_BODY || planetClass == PlanetClass.WATER_WORLD || planetClass == PlanetClass.AMMONIA_WORLD
+							|| planetClass == PlanetClass.HIGH_METAL_CONTENT_BODY) {
+						// Could have high payout
+					} else {
+						continue; // All others cannot have high payouts
+					}
+				} catch (Exception e) {
+					continue; // Not a planet
+				}
+			}
+
 			logger.debug("Extracting data for body" + bodies.indexOf(b));
 
 			final long start = System.currentTimeMillis();
@@ -677,32 +699,71 @@ public class SysmapScanner {
 		boolean buttonClicked = false;
 		while (!buttonClicked) {
 			Planar<GrayF32> rgb = null;
+			Planar<GrayF32> hsv = null;
 			synchronized (this.screenConverterResult) {
 				this.screenConverterResult.wait();
 				rgb = this.screenConverterResult.getRgb().clone();
+				hsv = this.screenConverterResult.getHsv().clone();
 			}
-			TemplateMatchRgb mButton = TemplateMatcher.findBestMatchingLocation(rgb, this.refTargetButtonInactive);
-			if (mButton.getErrorPerPixel() > 0.1f) {
-				mButton = TemplateMatcher.findBestMatchingLocation(rgb, this.refTargetButtonInactiveHovered);
+
+			GrayF32 gray = ConvertImage.average(rgb, null);
+			gray = GBlurImageOps.gaussian(gray, null, -1, 3, null);
+			for (int y = 0; y < hsv.height; y++) {
+				for (int x = 0; x < hsv.width; x++) {
+					float v = hsv.bands[2].unsafe_get(x, y);
+					float s = hsv.bands[1].unsafe_get(x, y);
+					if (v < 0.45f || s > 0.2f) {
+						gray.unsafe_set(x, y, 0f);
+					}
+				}
 			}
-			if (mButton.getErrorPerPixel() > 0.1f) {
-				mButton = TemplateMatcher.findBestMatchingLocation(rgb, this.refTargetButtonActive);
-			}
-			if (mButton.getErrorPerPixel() > 0.1f) {
-				mButton = TemplateMatcher.findBestMatchingLocation(rgb, this.refTargetButtonActiveHovered);
-			}
-			if (mButton.getErrorPerPixel() > 0.1f) {
-				logger.debug("Target button not visible");
-			} else {
-				Point p = mouseUtil.imageToScreen(new Point(mButton.getX() + mButton.getWidth() / 2, mButton.getY() + mButton.getHeight() / 2));
-				this.robot.mouseMove((p.x - 5) + random.nextInt(10), (p.y - 5) + random.nextInt(10));
-				Thread.sleep(200 + random.nextInt(50));
-				this.robot.mousePress(InputEvent.getMaskForButton(1));
-				Thread.sleep(150 + random.nextInt(50));
-				this.robot.mouseRelease(InputEvent.getMaskForButton(1));
-				buttonClicked = true;
-				logger.debug("Clicked on " + mButton.getTemplate().getName() + ", epp = " + mButton.getErrorPerPixel());
-				break;
+			TemplateMatch mUnexplored = TemplateMatcher.findBestMatchingLocationInRegion(gray, 420, 0, 1920 - 420, 1080, refUnexplored);
+			if (mUnexplored.getErrorPerPixel() <= 0.05f) {
+				int x = mUnexplored.getX() - 10;
+				int y = mUnexplored.getY() + 15;
+				int width = 80;
+				int height = 250;
+				logger.debug(mUnexplored + " --> " + x + "," + y);
+				try {
+					ImageIO.write(ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true), "PNG",
+							new File(System.getProperty("user.home"), "target_button_" + new SimpleDateFormat("yyyy-MM-dd HH-mm-ss").format(new Date()) + "_rgb.png"));
+					ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(gray), null), "PNG",
+							new File(System.getProperty("user.home"), "target_button_" + new SimpleDateFormat("yyyy-MM-dd HH-mm-ss").format(new Date()) + "_gray.png"));
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				TemplateMatchRgb mButton = TemplateMatcher.findBestMatchingLocationInRegion(rgb, x, y, width, height, this.refTargetButton);
+				TemplateMatchRgb mButtonInactive = TemplateMatcher.findBestMatchingLocationInRegion(rgb, x, y, width, height, this.refTargetButtonInactive);
+				TemplateMatchRgb mButtonInactiveHovered = TemplateMatcher.findBestMatchingLocationInRegion(rgb, x, y, width, height, this.refTargetButtonInactiveHovered);
+				TemplateMatchRgb mButtonButtonActive = TemplateMatcher.findBestMatchingLocationInRegion(rgb, x, y, width, height, this.refTargetButtonActive);
+				TemplateMatchRgb mButtonActiveHovered = TemplateMatcher.findBestMatchingLocationInRegion(rgb, x, y, width, height, this.refTargetButtonActiveHovered);
+				if (mButtonInactive.getErrorPerPixel() < mButton.getErrorPerPixel()) {
+					mButton = mButtonInactiveHovered;
+				}
+				if (mButtonInactiveHovered.getErrorPerPixel() < mButton.getErrorPerPixel()) {
+					mButton = mButtonInactiveHovered;
+				}
+				if (mButtonButtonActive.getErrorPerPixel() < mButton.getErrorPerPixel()) {
+					mButton = mButtonButtonActive;
+				}
+				if (mButtonActiveHovered.getErrorPerPixel() < mButton.getErrorPerPixel()) {
+					mButton = mButtonActiveHovered;
+				}
+				if (mButton.getErrorPerPixel() > 0.04f) {
+					logger.debug(mButton + " not visible");
+				} else {
+					Point p = mouseUtil.imageToScreen(new Point(mButton.getX() + mButton.getWidth() / 2, mButton.getY() + mButton.getHeight() / 2));
+					this.robot.mouseMove((p.x - 5) + random.nextInt(10), (p.y - 5) + random.nextInt(10));
+					Thread.sleep(500 + random.nextInt(100));
+					this.robot.mousePress(InputEvent.getMaskForButton(1));
+					Thread.sleep(150 + random.nextInt(50));
+					this.robot.mouseRelease(InputEvent.getMaskForButton(1));
+					Thread.sleep(150 + random.nextInt(50));
+					buttonClicked = true;
+					logger.debug("Clicked on " + mButton);
+					break;
+				}
 			}
 		}
 
@@ -907,6 +968,7 @@ public class SysmapScanner {
 			this.refUcLogo = TemplateRgb.fromFile(new File(refDir, "uc_logo.png"));
 			this.refDetailsTabActive = TemplateRgb.fromFile(new File(refDir, "sysmap_details_tab_active.png"));
 			this.refDetailsTabInactive = TemplateRgb.fromFile(new File(refDir, "sysmap_details_tab_inactive.png"));
+			this.refTargetButton = TemplateRgb.fromFile(new File(refDir, "sysmap_target_button.png"));
 			this.refTargetButtonActive = TemplateRgb.fromFile(new File(refDir, "sysmap_target_button_active.png"));
 			this.refTargetButtonActiveHovered = TemplateRgb.fromFile(new File(refDir, "sysmap_target_button_active_hovered.png"));
 			this.refTargetButtonInactive = TemplateRgb.fromFile(new File(refDir, "sysmap_target_button_inactive.png"));
@@ -987,7 +1049,7 @@ public class SysmapScanner {
 
 	private void writeDebugImages(SysmapBody b, String systemName, String bodyName, File debugFolder, final String ts) {
 		try {
-			if (this.isWriteDebugImageBodyRgbOriginal() || this.isWriteDebugImageBodyRgbResult()) {
+			if ((this.isWriteDebugImageBodyRgbOriginal() || this.isWriteDebugImageBodyRgbResult()) && b.rgbDebugImage != null) {
 				BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(b.rgbDebugImage), null, true);
 				if (this.isWriteDebugImageBodyRgbOriginal()) {
 					ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " sysmap_body $" + bodyName + " 00 rgb_original #" + systemName + ".png"));
@@ -1017,7 +1079,7 @@ public class SysmapScanner {
 				}
 			}
 
-			if (this.isWriteDebugImageBodyGray()) {
+			if (this.isWriteDebugImageBodyGray() && b.grayDebugImage != null) {
 				BufferedImage debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(b.grayDebugImage), null);
 				ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + ts + " sysmap_body $" + bodyName + " 01 gray #" + systemName + ".png"));
 			}

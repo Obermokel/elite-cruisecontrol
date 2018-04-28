@@ -77,11 +77,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private Template refCompassDotHollow = null;
 	private Template refTarget = null;
 	private Template refShipHud = null;
+	private Template refShipHudType9 = null;
 	private Template refSixSeconds = null;
 	private Template refSevenSeconds = null;
 	private Template refEightSeconds = null;
 	private Template refNineSeconds = null;
 	private Template refScanning = null;
+	private Template refScanningType9 = null;
 
 	private GameState gameState = GameState.UNKNOWN;
 	private int xPercent = 0;
@@ -209,6 +211,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				// <<<< DEBUG IMAGE <<<<
 			} catch (Exception e) {
 				logger.error(this.getName() + " crashed", e);
+				System.exit(-2);
 				break; // Quit
 			}
 		}
@@ -293,7 +296,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				}
 			}
 
-			scanningMatch = TemplateMatcher.findBestMatchingLocationInRegion(orangeHudImage, 2, 860, 180, 110, this.refScanning);
+			scanningMatch = TemplateMatcher.findBestMatchingLocationInRegion(orangeHudImage, 2, 860, 200, 130, this.refScanning);
+			TemplateMatch mType9 = TemplateMatcher.findBestMatchingLocationInRegion(orangeHudImage, 2, 860, 200, 130, this.refScanningType9);
+			if (mType9.getErrorPerPixel() < scanningMatch.getErrorPerPixel()) {
+				scanningMatch = mType9;
+			}
 			if (scanningMatch.getErrorPerPixel() > 0.075f) {
 				scanningMatch = null;
 			}
@@ -312,7 +319,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		case FSD_CHARGING:
 			if (this.brightnessAhead > 0.15f) {
 				this.shipControl.setPitchDown(100);
-				this.shipControl.setRollLeft(10);
+				this.shipControl.setRollLeft((int) (10 * Math.random()));
 				if (this.shipControl.getThrottle() != 75) {
 					this.shipControl.setThrottle(75);
 				}
@@ -390,7 +397,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			}
 			if (this.brightnessAhead > 0.10f) {
 				this.shipControl.setPitchDown(100);
-				this.shipControl.setRollLeft(10);
+				this.shipControl.setRollLeft((int) (10 * Math.random()));
 			} else {
 				this.shipControl.stopTurning();
 			}
@@ -406,7 +413,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					this.shipControl.setThrottle(75);
 				}
 				this.shipControl.setPitchDown(100);
-				this.shipControl.setRollLeft(10);
+				this.shipControl.setRollLeft((int) (10 * Math.random()));
 			} else {
 				this.shipControl.stopTurning();
 				if (this.shipControl.getThrottle() != 100) {
@@ -457,10 +464,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						} else {
 							logger.debug("Close system map");
 							this.shipControl.toggleSystemMap();
-							this.shipControl.setThrottle(100);
+							Thread.sleep(1000);
+							this.shipControl.setThrottle(0);
 							this.shipControl.selectNextSystemInRoute();
 							this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
-							logger.debug("All bodies scanned, aligning to next jump target at 100% throttle");
+							logger.debug("All bodies scanned, aligning to next jump target at 0% throttle");
+							break;
 						}
 					}
 					logger.debug("Close system map");
@@ -477,10 +486,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				if (this.currentSysmapBody.solarMasses != null) {
 					this.currentSysmapBody.unexplored = false; // Mark as explored
 					if (this.nextBodyToScan() == null) {
-						this.shipControl.setThrottle(100);
+						this.shipControl.setThrottle(0);
 						this.shipControl.selectNextSystemInRoute();
 						this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
-						logger.debug("Discarded a star to scan, no other body to scan, aligning to next jump target at 100% throttle");
+						logger.debug("Discarded a star to scan, no other body to scan, aligning to next jump target at 0% throttle");
 					} else {
 						this.shipControl.setThrottle(0);
 						this.shipControl.stopTurning();
@@ -495,7 +504,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						this.shipControl.setThrottle(25);
 					}
 					this.shipControl.setPitchDown(100);
-					this.shipControl.setRollLeft(10);
+					this.shipControl.setRollLeft((int) (10 * Math.random()));
 				}
 			} else {
 				if (targetMatch != null) {
@@ -532,10 +541,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				if (this.currentSysmapBody.solarMasses != null) {
 					this.currentSysmapBody.unexplored = false; // Mark as explored
 					if (this.nextBodyToScan() == null) {
-						this.shipControl.setThrottle(100);
+						this.shipControl.setThrottle(0);
 						this.shipControl.selectNextSystemInRoute();
 						this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
-						logger.debug("Discarded a star to scan, no other body to scan, aligning to next jump target at 100% throttle");
+						logger.debug("Discarded a star to scan, no other body to scan, aligning to next jump target at 0% throttle");
 					} else {
 						this.shipControl.setThrottle(0);
 						this.shipControl.stopTurning();
@@ -550,7 +559,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						this.shipControl.setThrottle(25);
 					}
 					this.shipControl.setPitchDown(100);
-					this.shipControl.setRollLeft(10);
+					this.shipControl.setRollLeft((int) (10 * Math.random()));
 				}
 			} else {
 				if (scanningMatch != null) {
@@ -582,15 +591,18 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				if (!this.clickOnNextBodyOnSystemMap(screenConverterResult)) {
 					this.currentSysmapBody.unexplored = false; // Mark as explored
 					if (this.nextBodyToScan() != null) {
+						logger.debug("Next body to scan would be " + this.nextBodyToScan());
 						this.gameState = GameState.WAIT_FOR_SYSTEM_MAP; // Choose next body
 						break;
 					} else {
 						logger.debug("Close system map");
 						this.shipControl.toggleSystemMap();
-						this.shipControl.setThrottle(100);
+						Thread.sleep(1000);
+						this.shipControl.setThrottle(0);
 						this.shipControl.selectNextSystemInRoute();
 						this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
-						logger.debug("All bodies scanned, aligning to next jump target at 100% throttle");
+						logger.debug("All bodies scanned, aligning to next jump target at 0% throttle");
+						break;
 					}
 				}
 				logger.debug("Close system map");
@@ -609,15 +621,15 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			break;
 		case ALIGN_TO_NEXT_SYSTEM:
 			if (this.brightnessAhead > 0.15f) {
-				if (this.shipControl.getThrottle() != 25) {
-					this.shipControl.setThrottle(25);
+				if (this.shipControl.getThrottle() != 0) {
+					this.shipControl.setThrottle(0);
 				}
 				this.shipControl.setPitchDown(100);
-				this.shipControl.setRollLeft(10);
+				this.shipControl.setRollLeft((int) (10 * Math.random()));
 			} else {
 				if (targetMatch != null) {
-					if (this.shipControl.getThrottle() != 100) {
-						this.shipControl.setThrottle(100);
+					if (this.shipControl.getThrottle() != 50) {
+						this.shipControl.setThrottle(50);
 					}
 					if (this.alignToTargetInHud(targetMatch) && System.currentTimeMillis() - this.lastScannedBodyAt > 2000) {
 						this.shipControl.toggleFsd();
@@ -625,8 +637,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						logger.debug("Next system in sight, charging FSD");
 					}
 				} else {
-					if (this.shipControl.getThrottle() != 75) {
-						this.shipControl.setThrottle(75);
+					if (this.shipControl.getThrottle() != 25) {
+						this.shipControl.setThrottle(25);
 					}
 					if (this.alignToTargetInCompass(compassMatch, compassDotMatch) && System.currentTimeMillis() - this.lastScannedBodyAt > 2000) {
 						this.shipControl.toggleFsd();
@@ -646,7 +658,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	}
 
 	private boolean isShipHudVisible(GrayF32 orangeHudImage) {
-		return TemplateMatcher.findBestMatchingLocation(orangeHudImage.subimage(1650, 900, 1900, 1050), this.refShipHud).getErrorPerPixel() <= 0.075f;
+		TemplateMatch mShipHud = TemplateMatcher.findBestMatchingLocation(orangeHudImage.subimage(1650, 900, 1900, 1050), this.refShipHud);
+		TemplateMatch mShipHudType9 = TemplateMatcher.findBestMatchingLocation(orangeHudImage.subimage(1650, 900, 1900, 1050), this.refShipHudType9);
+		if (mShipHudType9.getErrorPerPixel() < mShipHud.getErrorPerPixel()) {
+			mShipHud = mShipHudType9;
+		}
+		return mShipHud.getErrorPerPixel() <= 0.075f;
 	}
 
 	private void doEmergencyExit(String reason) {
@@ -684,6 +701,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					this.robot.mouseMove(1, 1);
 					if (!REASON_END_OF_PLOTTED_ROUTE.equals(reason)) {
 						this.shipControl.deployHeatsink();
+						try {
+							Thread.sleep(250);
+						} catch (InterruptedException e) {
+							logger.warn("Interrupted while waiting after deploying heatsink");
+						}
 					}
 					this.shipControl.fullStop();
 					try {
@@ -691,7 +713,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					} catch (InterruptedException e) {
 						logger.warn("Interrupted while waiting after stopping ship");
 					}
-					this.shipControl.exitToMainMenu();
+					this.shipControl.exitToMainMenu(this.screenRect);
 
 					// Wait until we are at the main menu
 					try {
@@ -981,17 +1003,19 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		// REF IMAGES MUST BE 1080p!!!!
 		File refDir = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref");
 		try {
-			this.refCompass = Template.fromFile(new File(refDir, "compass_orange.png"));
-			this.refCompassType9 = Template.fromFile(new File(refDir, "compass_type9.png"));
-			this.refCompassDotFilled = Template.fromFile(new File(refDir, "compass_dot_filled_bluewhite.png"));
-			this.refCompassDotHollow = Template.fromFile(new File(refDir, "compass_dot_hollow_bluewhite.png"));
+			this.refCompass = Template.fromFile(new File(refDir, "compass_orange_blurred.png"));
+			this.refCompassType9 = Template.fromFile(new File(refDir, "compass_type9_blurred.png"));
+			this.refCompassDotFilled = Template.fromFile(new File(refDir, "compass_dot_filled_bluewhite_blurred.png"));
+			this.refCompassDotHollow = Template.fromFile(new File(refDir, "compass_dot_hollow_bluewhite_blurred.png"));
 			this.refTarget = Template.fromFile(new File(refDir, "target_yellow.png"));
-			this.refShipHud = Template.fromFile(new File(refDir, "ship_hud.png"));
+			this.refShipHud = Template.fromFile(new File(refDir, "ship_hud_blurred.png"));
+			this.refShipHudType9 = Template.fromFile(new File(refDir, "ship_hud_type9_blurred.png"));
 			this.refSixSeconds = Template.fromFile(new File(refDir, "six_seconds.png"));
 			this.refSevenSeconds = Template.fromFile(new File(refDir, "seven_seconds.png"));
 			this.refEightSeconds = Template.fromFile(new File(refDir, "eight_seconds.png"));
 			this.refNineSeconds = Template.fromFile(new File(refDir, "nine_seconds.png"));
-			this.refScanning = Template.fromFile(new File(refDir, "scanning.png"));
+			this.refScanning = Template.fromFile(new File(refDir, "scanning_blurred.png"));
+			this.refScanningType9 = Template.fromFile(new File(refDir, "scanning_type9_blurred.png"));
 		} catch (IOException e) {
 			throw new RuntimeException("Failed to load ref images", e);
 		}
@@ -1216,6 +1240,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		} else if (event instanceof ScanEvent) {
 			this.lastScannedBodyAt = System.currentTimeMillis();
 			this.lastScannedBodyDistanceFromArrival = MiscUtil.getAsFloat(((ScanEvent) event).getDistanceFromArrivalLS(), 0f);
+			this.shipControl.selectNextSystemInRoute();
 			if (this.currentSysmapBody != null) {
 				this.shipControl.setThrottle(0);
 				this.shipControl.stopTurning();
@@ -1271,10 +1296,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 				this.currentSysmapBody = null;
 				if (this.nextBodyToScan() == null) {
-					this.shipControl.setThrottle(100);
+					this.shipControl.setThrottle(0);
 					this.shipControl.selectNextSystemInRoute();
 					this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
-					logger.debug("All bodies scanned, aligning to next jump target at 100% throttle");
+					logger.debug("All bodies scanned, aligning to next jump target at 0% throttle");
 				} else {
 					this.shipControl.setThrottle(0);
 					this.shipControl.stopTurning();
@@ -1369,6 +1394,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					logger.warn("Did not find " + b + " in sysmap after scrolling to it, instead found " + hovered);
 					return false;
 				} else {
+					logger.debug("Found " + b + " and clicked on it, now waiting for target button to click on");
 					return this.sysmapScanner.clickOnTargetButton();
 				}
 			}

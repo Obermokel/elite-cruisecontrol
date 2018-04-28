@@ -1,7 +1,10 @@
 package borg.ed.cruisecontrol.templatematching;
 
+import java.awt.Point;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import boofcv.struct.image.GrayF32;
 import boofcv.struct.image.Planar;
@@ -88,6 +91,77 @@ public class TemplateMatcher {
 					bestError = error;
 					bestErrorPerPixel = errorPerPixel;
 					bestMatch = new TemplateMatch(image, t, xInImage, yInImage, template.width, template.height, error, errorPerPixel);
+				}
+			}
+		}
+
+		return bestMatch;
+	}
+
+	public static TemplateMatch findBestMatchingLocationInRegionSmarter(GrayF32 image, int x, int y, int width, int height, Template template, float maxErrorPerPixel) {
+		GrayF32 subimage = image.subimage(x, y, x + width, y + height);
+		TemplateMatch m = TemplateMatcher.findBestMatchingLocationSmarter(subimage, template, maxErrorPerPixel);
+		return new TemplateMatch(m.getImage(), m.getTemplate(), m.getX() + x, m.getY() + y, m.getWidth(), m.getHeight(), m.getError(), m.getErrorPerPixel());
+	}
+
+	public static TemplateMatch findBestMatchingLocationSmarter(GrayF32 image, Template t, float maxErrorPerPixel) {
+		TemplateMatch bestMatch = null;
+
+		GrayF32 template = t.getPixels();
+		GrayF32 mask = t.getMask();
+
+		final int minPixels = (template.width * template.height) / 25;
+
+		Set<Point> nonBlackPoints = new HashSet<>(1000);
+		for (int yInImage = 0; yInImage <= image.height; yInImage++) {
+			for (int xInImage = 0; xInImage <= image.width; xInImage++) {
+				if (image.unsafe_get(xInImage, yInImage) > 0) {
+					nonBlackPoints.add(new Point(xInImage, yInImage));
+				}
+			}
+		}
+
+		Set<Point> scanPoints = new HashSet<>(nonBlackPoints.size());
+		for (int yInImage = 0; yInImage <= image.height; yInImage++) {
+			for (int xInImage = 0; xInImage <= image.width; xInImage++) {
+				Point scanPoint = new Point(xInImage, yInImage);
+				for (Point nonBlackPoint : nonBlackPoints) {
+					int dx = Math.abs(nonBlackPoint.x - scanPoint.x);
+					if (dx <= template.width) {
+						int dy = Math.abs(nonBlackPoint.y - scanPoint.y);
+						if (dy <= template.height) {
+							scanPoints.add(scanPoint);
+						}
+					}
+				}
+			}
+		}
+
+		float bestError = 999999999.9f;
+		float bestErrorPerPixel = 999999999.9f;
+		for (int yInImage = 0; yInImage <= (image.height - template.height); yInImage++) {
+			for (int xInImage = 0; xInImage <= (image.width - template.width); xInImage++) {
+				if (scanPoints.contains(new Point(xInImage, yInImage))) {
+					float error = 0.0f;
+					int pixels = 0;
+					for (int yInTemplate = 0; yInTemplate < template.height && error < bestError && (pixels < minPixels || error / pixels < maxErrorPerPixel); yInTemplate++) {
+						for (int xInTemplate = 0; xInTemplate < template.width && error < bestError && (pixels < minPixels || error / pixels < maxErrorPerPixel); xInTemplate++) {
+							float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
+							if (maskValue > 0) {
+								float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
+								float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
+								float diff = vImage - vTemplate;
+								error += (diff * diff) * maskValue;
+								pixels++;
+							}
+						}
+					}
+					float errorPerPixel = error / pixels;
+					if (errorPerPixel < bestErrorPerPixel) {
+						bestError = error;
+						bestErrorPerPixel = errorPerPixel;
+						bestMatch = new TemplateMatch(image, t, xInImage, yInImage, template.width, template.height, error, errorPerPixel);
+					}
 				}
 			}
 		}

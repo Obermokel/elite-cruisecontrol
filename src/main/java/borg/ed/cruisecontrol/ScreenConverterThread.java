@@ -40,6 +40,8 @@ public class ScreenConverterThread extends Thread {
 		GrayF32 redHudImage = orangeHudImage.createSameShape();
 		GrayF32 brightImage = orangeHudImage.createSameShape();
 
+		GrayF32 work = orangeHudImage.createSameShape();
+
 		while (!Thread.currentThread().isInterrupted() && !this.shutdown) {
 			// Wait for the next (scaled) screen capture and convert it into BoofCV format
 			synchronized (this.screenReaderResult) {
@@ -55,7 +57,10 @@ public class ScreenConverterThread extends Thread {
 			rgb = ImageUtil.normalize255(rgb);
 			ColorHsv.rgbToHsv_F32(rgb, hsv);
 			this.hsvToHudImages(hsv, orangeHudImage, yellowHudImage, blueWhiteHudImage, redHudImage, brightImage);
-			yellowHudImage = GBlurImageOps.gaussian(yellowHudImage, null, -1, 1, null);
+			GBlurImageOps.gaussian(orangeHudImage, orangeHudImage, -1, 1, work);
+			GBlurImageOps.gaussian(yellowHudImage, yellowHudImage, -1, 1, work);
+			GBlurImageOps.gaussian(blueWhiteHudImage, blueWhiteHudImage, -1, 1, work);
+			GBlurImageOps.gaussian(redHudImage, redHudImage, -1, 1, work);
 
 			// Notify waiting threads
 			synchronized (this.screenConverterResult) {
