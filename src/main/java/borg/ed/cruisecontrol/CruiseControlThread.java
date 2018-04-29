@@ -293,9 +293,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 	Integer sixSecondsRegionX = null;
 	Integer sixSecondsRegionY = null;
-	final int sixSecondsRegionWidth = 60;
+	final int sixSecondsRegionWidth = 76;
 	final int sixSecondsRegionHeight = 34;
-	final float sixSecondsMaxErrorPerPixel = 0.04f;
+	final float sixSecondsMaxErrorPerPixel = 0.045f;
 
 	private void searchForSixSecondsOrScanning(GrayF32 orangeHudImage, GrayF32 yellowHudImage) {
 		sixSecondsRegionX = null;
@@ -304,7 +304,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			if (targetX == null || targetY == null) {
 				sixSecondsMatch = null;
 			} else {
-				sixSecondsRegionX = targetX + 48;
+				sixSecondsRegionX = targetX + 40;
 				sixSecondsRegionY = targetY + 20;
 				sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsRegionX, sixSecondsRegionY, sixSecondsRegionWidth, sixSecondsRegionHeight,
 						this.refSixSeconds);
