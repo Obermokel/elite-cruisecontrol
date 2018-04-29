@@ -88,7 +88,7 @@ public class ShipControl {
 			this.pitchDown = 0;
 			this.pressKeyPercentOfTime(0, KeyEvent.VK_X);
 
-			this.pitchUp = "Larissa DeLorean".equals(CruiseControlApplication.myCommanderName) ? Math.round(0.5f * percent) : percent; // FIXME Dirty hack for Larissa
+			this.pitchUp = "Larissa DeLorean".equals(CruiseControlApplication.myCommanderName) ? Math.round(0.33f * percent) : percent; // FIXME Dirty hack for Larissa
 			this.pressKeyPercentOfTime(this.pitchUp, KeyEvent.VK_W);
 		}
 	}
@@ -104,7 +104,7 @@ public class ShipControl {
 			this.pitchUp = 0;
 			this.pressKeyPercentOfTime(0, KeyEvent.VK_W);
 
-			this.pitchDown = "Larissa DeLorean".equals(CruiseControlApplication.myCommanderName) ? Math.round(0.5f * percent) : percent; // FIXME Dirty hack for Larissa
+			this.pitchDown = "Larissa DeLorean".equals(CruiseControlApplication.myCommanderName) ? Math.round(0.33f * percent) : percent; // FIXME Dirty hack for Larissa
 			this.pressKeyPercentOfTime(this.pitchDown, KeyEvent.VK_X);
 		}
 	}
@@ -120,7 +120,7 @@ public class ShipControl {
 			this.rollLeft = 0;
 			this.pressKeyPercentOfTime(0, KeyEvent.VK_Q);
 
-			this.rollRight = "Larissa DeLorean".equals(CruiseControlApplication.myCommanderName) ? Math.round(0.5f * percent) : percent; // FIXME Dirty hack for Larissa
+			this.rollRight = "Larissa DeLorean".equals(CruiseControlApplication.myCommanderName) ? Math.round(0.33f * percent) : percent; // FIXME Dirty hack for Larissa
 			this.pressKeyPercentOfTime(this.rollRight, KeyEvent.VK_E);
 		}
 	}
@@ -136,7 +136,7 @@ public class ShipControl {
 			this.rollRight = 0;
 			this.pressKeyPercentOfTime(0, KeyEvent.VK_E);
 
-			this.rollLeft = "Larissa DeLorean".equals(CruiseControlApplication.myCommanderName) ? Math.round(0.5f * percent) : percent; // FIXME Dirty hack for Larissa
+			this.rollLeft = "Larissa DeLorean".equals(CruiseControlApplication.myCommanderName) ? Math.round(0.33f * percent) : percent; // FIXME Dirty hack for Larissa
 			this.pressKeyPercentOfTime(this.rollLeft, KeyEvent.VK_Q);
 		}
 	}
@@ -152,7 +152,7 @@ public class ShipControl {
 			this.yawLeft = 0;
 			this.pressKeyPercentOfTime(0, KeyEvent.VK_A);
 
-			this.yawRight = "Larissa DeLorean".equals(CruiseControlApplication.myCommanderName) ? Math.round(0.5f * percent) : percent; // FIXME Dirty hack for Larissa
+			this.yawRight = "Larissa DeLorean".equals(CruiseControlApplication.myCommanderName) ? Math.round(0.33f * percent) : percent; // FIXME Dirty hack for Larissa
 			this.pressKeyPercentOfTime(this.yawRight, KeyEvent.VK_D);
 		}
 	}
@@ -168,7 +168,7 @@ public class ShipControl {
 			this.yawRight = 0;
 			this.pressKeyPercentOfTime(0, KeyEvent.VK_D);
 
-			this.yawLeft = "Larissa DeLorean".equals(CruiseControlApplication.myCommanderName) ? Math.round(0.5f * percent) : percent; // FIXME Dirty hack for Larissa
+			this.yawLeft = "Larissa DeLorean".equals(CruiseControlApplication.myCommanderName) ? Math.round(0.33f * percent) : percent; // FIXME Dirty hack for Larissa
 			this.pressKeyPercentOfTime(this.yawLeft, KeyEvent.VK_A);
 		}
 	}
@@ -433,12 +433,12 @@ public class ShipControl {
 					//					if (lastPercent == 100 && this.percent == 100) {
 					lastPercent = this.percent;
 					this.robot.keyPress(this.keyCode);
-					Thread.sleep(this.percent * 4);
+					Thread.sleep(this.percent * 3);
 					//					}
 
 					if (this.percent < 100) {
 						this.robot.keyRelease(this.keyCode);
-						Thread.sleep((100 - this.percent) * 4);
+						Thread.sleep((100 - this.percent) * 3);
 					}
 				} catch (InterruptedException e) {
 					break;
