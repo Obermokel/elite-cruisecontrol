@@ -83,6 +83,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private Template refSevenSeconds = null;
 	private Template refEightSeconds = null;
 	private Template refNineSeconds = null;
+	private Template refTenSeconds = null;
+	private Template refElevenSeconds = null;
 	private Template refScanning = null;
 	private Template refScanningType9 = null;
 
@@ -118,7 +120,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private static final int TARGET_REGION_X = 555;
 	private static final int TARGET_REGION_Y = 190;
 	private static final int TARGET_REGION_WIDTH = 810;
-	private static final int TARGET_REGION_HEIGHT = 550;
+	private static final int TARGET_REGION_HEIGHT = 570;
 	private TemplateMatch targetMatch = null;
 
 	private TemplateMatch sixSecondsMatch = null;
@@ -283,14 +285,20 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				int sixSecondsX = targetMatch.getX() + 90;
 				int sixSecondsY = targetMatch.getY() + 75;
 				sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refSixSeconds);
-				if (sixSecondsMatch.getErrorPerPixel() > 0.03f) {
+				if (sixSecondsMatch.getErrorPerPixel() > 0.040f) {
 					sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refSevenSeconds);
-					if (sixSecondsMatch.getErrorPerPixel() > 0.03f) {
+					if (sixSecondsMatch.getErrorPerPixel() > 0.040f) {
 						sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refEightSeconds);
-						if (sixSecondsMatch.getErrorPerPixel() > 0.03f) {
+						if (sixSecondsMatch.getErrorPerPixel() > 0.040f) {
 							sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refNineSeconds);
-							if (sixSecondsMatch.getErrorPerPixel() > 0.03f) {
-								sixSecondsMatch = null;
+							if (sixSecondsMatch.getErrorPerPixel() > 0.040f) {
+								sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refTenSeconds);
+								if (sixSecondsMatch.getErrorPerPixel() > 0.040f) {
+									sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refElevenSeconds);
+									if (sixSecondsMatch.getErrorPerPixel() > 0.040f) {
+										sixSecondsMatch = null;
+									}
+								}
 							}
 						}
 					}
@@ -302,7 +310,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			if (mType9.getErrorPerPixel() < scanningMatch.getErrorPerPixel()) {
 				scanningMatch = mType9;
 			}
-			if (scanningMatch.getErrorPerPixel() > 0.075f) {
+			if (scanningMatch.getErrorPerPixel() > 0.11f) {
 				scanningMatch = null;
 			}
 		} else {
@@ -664,7 +672,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		if (mShipHudType9.getErrorPerPixel() < mShipHud.getErrorPerPixel()) {
 			mShipHud = mShipHudType9;
 		}
-		return mShipHud.getErrorPerPixel() <= 0.075f;
+		return mShipHud.getErrorPerPixel() <= 0.1f;
 	}
 
 	private void doEmergencyExit(String reason) {
@@ -996,8 +1004,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		int startX = this.targetMatch == null ? TARGET_REGION_WIDTH / 2 : this.targetMatch.getX() - TARGET_REGION_X;
 		int startY = this.targetMatch == null ? TARGET_REGION_HEIGHT / 2 : this.targetMatch.getY() - TARGET_REGION_Y;
 		TemplateMatch m = TemplateMatcher.findBestMatchingLocationInRegionSmart(yellowHudImage, TARGET_REGION_X, TARGET_REGION_Y, TARGET_REGION_WIDTH, TARGET_REGION_HEIGHT, this.refTarget,
-				startX, startY, 0.020f);
-		return m.getErrorPerPixel() < 0.020f ? m : null;
+				startX, startY, 0.15f);
+		return m.getErrorPerPixel() < 0.15f ? m : null;
 	}
 
 	private void loadRefImages() {
@@ -1015,6 +1023,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			this.refSevenSeconds = Template.fromFile(new File(refDir, "seven_seconds.png"));
 			this.refEightSeconds = Template.fromFile(new File(refDir, "eight_seconds.png"));
 			this.refNineSeconds = Template.fromFile(new File(refDir, "nine_seconds.png"));
+			this.refTenSeconds = Template.fromFile(new File(refDir, "ten_seconds.png"));
+			this.refElevenSeconds = Template.fromFile(new File(refDir, "eleven_seconds.png"));
 			this.refScanning = Template.fromFile(new File(refDir, "scanning_blurred.png"));
 			this.refScanningType9 = Template.fromFile(new File(refDir, "scanning_type9_blurred.png"));
 		} catch (IOException e) {
@@ -1374,32 +1384,32 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				logger.warn("Did not find " + b + " in sysmap, instead found " + hovered);
 				return false;
 			} else {
-				// TODO Might click on target button directly from here? Why first click on body and scroll map?
-				this.shipControl.leftClick(); // Click on body
-				Thread.sleep(1500 + random.nextInt(500)); // Wait for map to scroll
-				this.robot.mouseMove(this.screenRect.width / 2, this.screenRect.height / 2); // Move mouse to now centered planet
-				Thread.sleep(250 + random.nextInt(250));
-				while ((System.currentTimeMillis() - start) < 10000L) {
-					Planar<GrayF32> rgb = null;
-					Planar<GrayF32> hsv = null;
-					synchronized (screenConverterResult) {
-						screenConverterResult.wait();
-						rgb = screenConverterResult.getRgb().clone();
-						hsv = screenConverterResult.getHsv().clone();
-					}
-					hovered.clearData();
-					if (this.sysmapScanner.extractBodyData(rgb, hsv, hovered)) {
-						break;
-					}
-				}
-
-				if (!hovered.hasSameData(b)) {
-					logger.warn("Did not find " + b + " in sysmap after scrolling to it, instead found " + hovered);
-					return false;
-				} else {
-					logger.debug("Found " + b + " and clicked on it, now waiting for target button to click on");
-					return this.sysmapScanner.clickOnTargetButton();
-				}
+				//				// TODO Might click on target button directly from here? Why first click on body and scroll map?
+				//				this.shipControl.leftClick(); // Click on body
+				//				Thread.sleep(1500 + random.nextInt(500)); // Wait for map to scroll
+				//				this.robot.mouseMove(this.screenRect.width / 2, this.screenRect.height / 2); // Move mouse to now centered planet
+				//				Thread.sleep(250 + random.nextInt(250));
+				//				while ((System.currentTimeMillis() - start) < 10000L) {
+				//					Planar<GrayF32> rgb = null;
+				//					Planar<GrayF32> hsv = null;
+				//					synchronized (screenConverterResult) {
+				//						screenConverterResult.wait();
+				//						rgb = screenConverterResult.getRgb().clone();
+				//						hsv = screenConverterResult.getHsv().clone();
+				//					}
+				//					hovered.clearData();
+				//					if (this.sysmapScanner.extractBodyData(rgb, hsv, hovered)) {
+				//						break;
+				//					}
+				//				}
+				//
+				//				if (!hovered.hasSameData(b)) {
+				//					logger.warn("Did not find " + b + " in sysmap after scrolling to it, instead found " + hovered);
+				//					return false;
+				//				} else {
+				logger.debug("Found " + b + " and clicked on it, now waiting for target button to click on");
+				return this.sysmapScanner.clickOnTargetButton();
+				//				}
 			}
 		} catch (InterruptedException e) {
 			logger.warn("Interrupted while clicking on system map", e);
