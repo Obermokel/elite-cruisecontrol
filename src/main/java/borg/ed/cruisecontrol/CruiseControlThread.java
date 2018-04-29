@@ -1,5 +1,6 @@
 package borg.ed.cruisecontrol;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
@@ -12,6 +13,7 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,10 +29,20 @@ import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
 
 import org.apache.commons.lang.StringUtils;
+import org.ddogleg.struct.FastQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import boofcv.abst.feature.associate.AssociateDescription;
+import boofcv.abst.feature.associate.ScoreAssociation;
+import boofcv.abst.feature.detdesc.DetectDescribePoint;
+import boofcv.abst.feature.detect.interest.ConfigFastHessian;
+import boofcv.alg.descriptor.UtilFeature;
+import boofcv.factory.feature.associate.FactoryAssociation;
+import boofcv.factory.feature.detdesc.FactoryDetectDescribe;
 import boofcv.io.image.ConvertBufferedImage;
+import boofcv.struct.feature.AssociatedIndex;
+import boofcv.struct.feature.BrightFeature;
 import boofcv.struct.image.GrayF32;
 import boofcv.struct.image.Planar;
 import borg.ed.cruisecontrol.sysmap.SensibleScanOrderComparator;
@@ -59,6 +71,7 @@ import borg.ed.universe.model.Body;
 import borg.ed.universe.service.UniverseService;
 import borg.ed.universe.util.BodyUtil;
 import borg.ed.universe.util.MiscUtil;
+import georegression.struct.point.Point2D_F64;
 
 public class CruiseControlThread extends Thread implements JournalUpdateListener, StatusUpdateListener {
 
@@ -121,7 +134,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private static final int TARGET_REGION_Y = 190;
 	private static final int TARGET_REGION_WIDTH = 810;
 	private static final int TARGET_REGION_HEIGHT = 570;
-	private TemplateMatch targetMatch = null;
+	//private TemplateMatch targetMatch = null;
 
 	private TemplateMatch sixSecondsMatch = null;
 	private TemplateMatch scanningMatch = null;
@@ -225,14 +238,14 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private TemplateMatch searchForCompassAndTarget(GrayF32 orangeHudImage, GrayF32 yellowHudImage, GrayF32 blueWhiteHudImage, final ExecutorService threadPool)
 			throws InterruptedException, ExecutionException {
 		compassMatch = null;
-		targetMatch = null;
+		//targetMatch = null;
 		if (gameState == GameState.UNKNOWN || gameState == GameState.ALIGN_TO_NEXT_SYSTEM || gameState == GameState.FSD_CHARGING || gameState == GameState.ALIGN_TO_NEXT_BODY
 				|| gameState == GameState.APPROACH_NEXT_BODY) {
 			final GrayF32 myYellowHudImage = yellowHudImage;
-			Future<TemplateMatch> futureTarget = threadPool.submit(new Callable<TemplateMatch>() {
+			Future<Point> futureTarget = threadPool.submit(new Callable<Point>() {
 				@Override
-				public TemplateMatch call() throws Exception {
-					return locateTargetSmart(myYellowHudImage);
+				public Point call() throws Exception {
+					return locateTargetFeature(myYellowHudImage);
 				}
 			});
 			final GrayF32 myOrangeHudImage = orangeHudImage;
@@ -242,11 +255,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					return locateCompassSmart(myOrangeHudImage);
 				}
 			});
-			targetMatch = futureTarget.get();
+			futureTarget.get();
+			//targetMatch = futureTarget.get();
 			compassMatch = futureCompass.get();
 		} else {
 			compassMatch = null;
-			targetMatch = null;
+			//targetMatch = null;
 		}
 
 		TemplateMatch compassDotMatch = null;
@@ -277,25 +291,39 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		return compassDotMatch;
 	}
 
+	Integer sixSecondsRegionX = null;
+	Integer sixSecondsRegionY = null;
+	final int sixSecondsRegionWidth = 60;
+	final int sixSecondsRegionHeight = 34;
+	final float sixSecondsMaxErrorPerPixel = 0.04f;
+
 	private void searchForSixSecondsOrScanning(GrayF32 orangeHudImage, GrayF32 yellowHudImage) {
+		sixSecondsRegionX = null;
+		sixSecondsRegionY = null;
 		if (gameState == GameState.APPROACH_NEXT_BODY) {
-			if (targetMatch == null) {
+			if (targetX == null || targetY == null) {
 				sixSecondsMatch = null;
 			} else {
-				int sixSecondsX = targetMatch.getX() + 90;
-				int sixSecondsY = targetMatch.getY() + 75;
-				sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refSixSeconds);
-				if (sixSecondsMatch.getErrorPerPixel() > 0.040f) {
-					sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refSevenSeconds);
-					if (sixSecondsMatch.getErrorPerPixel() > 0.040f) {
-						sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refEightSeconds);
-						if (sixSecondsMatch.getErrorPerPixel() > 0.040f) {
-							sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refNineSeconds);
-							if (sixSecondsMatch.getErrorPerPixel() > 0.040f) {
-								sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refTenSeconds);
-								if (sixSecondsMatch.getErrorPerPixel() > 0.040f) {
-									sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsX, sixSecondsY, 82, 28, this.refElevenSeconds);
-									if (sixSecondsMatch.getErrorPerPixel() > 0.040f) {
+				sixSecondsRegionX = targetX + 48;
+				sixSecondsRegionY = targetY + 20;
+				sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsRegionX, sixSecondsRegionY, sixSecondsRegionWidth, sixSecondsRegionHeight,
+						this.refSixSeconds);
+				if (sixSecondsMatch.getErrorPerPixel() > sixSecondsMaxErrorPerPixel) {
+					sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsRegionX, sixSecondsRegionY, sixSecondsRegionWidth, sixSecondsRegionHeight,
+							this.refSevenSeconds);
+					if (sixSecondsMatch.getErrorPerPixel() > sixSecondsMaxErrorPerPixel) {
+						sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsRegionX, sixSecondsRegionY, sixSecondsRegionWidth, sixSecondsRegionHeight,
+								this.refEightSeconds);
+						if (sixSecondsMatch.getErrorPerPixel() > sixSecondsMaxErrorPerPixel) {
+							sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsRegionX, sixSecondsRegionY, sixSecondsRegionWidth,
+									sixSecondsRegionHeight, this.refNineSeconds);
+							if (sixSecondsMatch.getErrorPerPixel() > sixSecondsMaxErrorPerPixel) {
+								sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsRegionX, sixSecondsRegionY, sixSecondsRegionWidth,
+										sixSecondsRegionHeight, this.refTenSeconds);
+								if (sixSecondsMatch.getErrorPerPixel() > sixSecondsMaxErrorPerPixel) {
+									sixSecondsMatch = TemplateMatcher.findBestMatchingLocationInRegion(yellowHudImage, sixSecondsRegionX, sixSecondsRegionY, sixSecondsRegionWidth,
+											sixSecondsRegionHeight, this.refElevenSeconds);
+									if (sixSecondsMatch.getErrorPerPixel() > sixSecondsMaxErrorPerPixel) {
 										sixSecondsMatch = null;
 									}
 								}
@@ -345,8 +373,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						this.shipControl.setThrottle(100);
 					}
 				}
-				if (targetMatch != null) {
-					this.alignToTargetInHud(targetMatch);
+				if (targetPercentX != null && targetPercentY != null) {
+					this.alignToTargetInHud();
 				} else {
 					this.alignToTargetInCompass(compassMatch, compassDotMatch);
 				}
@@ -516,11 +544,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					this.shipControl.setRollLeft((int) (10 * Math.random()));
 				}
 			} else {
-				if (targetMatch != null) {
+				if (targetPercentX != null && targetPercentY != null) {
 					if (this.shipControl.getThrottle() != 0) {
 						this.shipControl.setThrottle(0);
 					}
-					if (this.alignToTargetInHud(targetMatch)) {
+					if (this.alignToTargetInHud()) {
 						this.shipControl.setThrottle(75);
 						this.gameState = GameState.APPROACH_NEXT_BODY;
 						logger.debug("Next body in sight, accelerating to 75% and waiting for detailed surface scan");
@@ -579,7 +607,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					if (this.shipControl.getThrottle() != 75) {
 						this.shipControl.setThrottle(75);
 					}
-				} else if (targetMatch == null) {
+				} else if (targetPercentX == null || targetPercentY == null) {
 					if (this.shipControl.getThrottle() != 0) {
 						this.shipControl.setThrottle(0);
 					}
@@ -588,8 +616,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						this.shipControl.setThrottle(100);
 					}
 				}
-				if (targetMatch != null) {
-					this.alignToTargetInHud(targetMatch);
+				if (targetPercentX != null && targetPercentY != null) {
+					this.alignToTargetInHud();
 				} else {
 					this.alignToTargetInCompass(compassMatch, compassDotMatch);
 				}
@@ -636,11 +664,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				this.shipControl.setPitchDown(100);
 				this.shipControl.setRollLeft((int) (10 * Math.random()));
 			} else {
-				if (targetMatch != null) {
+				if (targetPercentX != null && targetPercentY != null) {
 					if (this.shipControl.getThrottle() != 50) {
 						this.shipControl.setThrottle(50);
 					}
-					if (this.alignToTargetInHud(targetMatch) && System.currentTimeMillis() - this.lastScannedBodyAt > 2000) {
+					if (this.alignToTargetInHud() && System.currentTimeMillis() - this.lastScannedBodyAt > 2000) {
 						this.shipControl.toggleFsd();
 						this.gameState = GameState.FSD_CHARGING;
 						logger.debug("Next system in sight, charging FSD");
@@ -813,14 +841,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		return bright / total;
 	}
 
-	private boolean alignToTargetInHud(TemplateMatch hudMatch) {
-		if (hudMatch == null) {
+	private boolean alignToTargetInHud() {
+		if (targetPercentX == null || targetPercentY == null) {
 			this.shipControl.stopTurning();
 		} else {
-			int x = (hudMatch.getX() + hudMatch.getWidth() / 2);
-			int y = (hudMatch.getY() + hudMatch.getHeight() / 2);
-			xPercent = (x * 100) / CruiseControlApplication.SCALED_WIDTH;
-			yPercent = (y * 100) / CruiseControlApplication.SCALED_HEIGHT;
+			xPercent = targetPercentX;
+			yPercent = targetPercentY;
 
 			if (xPercent >= 49 && xPercent <= 51 && yPercent >= 49 && yPercent <= 51) {
 				this.shipControl.stopTurning();
@@ -1000,12 +1026,91 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		}
 	}
 
-	private TemplateMatch locateTargetSmart(GrayF32 yellowHudImage) {
-		int startX = this.targetMatch == null ? TARGET_REGION_WIDTH / 2 : this.targetMatch.getX() - TARGET_REGION_X;
-		int startY = this.targetMatch == null ? TARGET_REGION_HEIGHT / 2 : this.targetMatch.getY() - TARGET_REGION_Y;
-		TemplateMatch m = TemplateMatcher.findBestMatchingLocationInRegionSmart(yellowHudImage, TARGET_REGION_X, TARGET_REGION_Y, TARGET_REGION_WIDTH, TARGET_REGION_HEIGHT, this.refTarget,
-				startX, startY, 0.15f);
-		return m.getErrorPerPixel() < 0.15f ? m : null;
+	//	private TemplateMatch locateTargetSmart(GrayF32 yellowHudImage) {
+	//		int startX = this.targetMatch == null ? TARGET_REGION_WIDTH / 2 : this.targetMatch.getX() - TARGET_REGION_X;
+	//		int startY = this.targetMatch == null ? TARGET_REGION_HEIGHT / 2 : this.targetMatch.getY() - TARGET_REGION_Y;
+	//		TemplateMatch m = TemplateMatcher.findBestMatchingLocationInRegionSmart(yellowHudImage, TARGET_REGION_X, TARGET_REGION_Y, TARGET_REGION_WIDTH, TARGET_REGION_HEIGHT, this.refTarget,
+	//				startX, startY, 0.15f);
+	//		return m.getErrorPerPixel() < 0.15f ? m : null;
+	//	}
+
+	DetectDescribePoint<GrayF32, BrightFeature> detDescTarget = FactoryDetectDescribe.surfStable(new ConfigFastHessian(0.0008f, 2, -1, 1, 9, 4, 4), null, null, GrayF32.class);
+	ScoreAssociation<BrightFeature> scorerTarget = FactoryAssociation.defaultScore(detDescTarget.getDescriptionType());
+	AssociateDescription<BrightFeature> associateTarget = FactoryAssociation.greedy(scorerTarget, Double.MAX_VALUE, true);
+
+	List<Point2D_F64> pointsRef = new ArrayList<>();
+	FastQueue<BrightFeature> descRef = UtilFeature.createQueue(detDescTarget, 100);
+
+	int nFeaturesTarget = -1; // Number of features detected in the captured (sub)image of the HUD
+	int nMatchesTarget = -1; // Number of features which could be matched to the reference image
+	int nMedianTarget = -1; // Number of matched features which are close to the median translation
+
+	Integer targetX = null; // x of center of target indicator in image
+	Integer targetY = null; // y of center of target indicator in image
+	Integer targetPercentX = null; // percent to the right - 0%=left, 50%=centered, 100%=right
+	Integer targetPercentY = null; // percent to the bottom - 0%=top, 50%=centered, 100%=bottom
+
+	private Point locateTargetFeature(GrayF32 yellowHudImage) {
+		nFeaturesTarget = -1;
+		nMatchesTarget = -1;
+		nMedianTarget = -1;
+		targetX = null;
+		targetY = null;
+		targetPercentX = null;
+		targetPercentY = null;
+
+		detDescTarget.detect(yellowHudImage.subimage(TARGET_REGION_X, TARGET_REGION_Y, TARGET_REGION_X + TARGET_REGION_WIDTH, TARGET_REGION_Y + TARGET_REGION_HEIGHT));
+		nFeaturesTarget = detDescTarget.getNumberOfFeatures();
+		if (nFeaturesTarget <= 0) {
+			return null;
+		}
+		List<Point2D_F64> pointsImage = new ArrayList<>();
+		FastQueue<BrightFeature> descImage = UtilFeature.createQueue(detDescTarget, 100);
+		for (int i = 0; i < detDescTarget.getNumberOfFeatures(); i++) {
+			pointsImage.add(detDescTarget.getLocation(i).copy());
+			descImage.grow().setTo(detDescTarget.getDescription(i));
+		}
+		associateTarget.setSource(descRef);
+		associateTarget.setDestination(descImage);
+		associateTarget.associate();
+		nMatchesTarget = associateTarget.getMatches().size();
+		logger.debug("Found " + nMatchesTarget + " matches, source.size=" + descRef.size());
+		if (nMatchesTarget < 7) { // We need something to work with
+			return null;
+		}
+		List<Double> distances = new ArrayList<>();
+		for (int i = 0; i < associateTarget.getMatches().size(); i++) {
+			AssociatedIndex ai = associateTarget.getMatches().get(i);
+			Point2D_F64 refPoint = pointsRef.get(ai.src);
+			Point2D_F64 imagePoint = pointsImage.get(ai.dst);
+			distances.add(refPoint.distance(imagePoint));
+		}
+		Collections.sort(distances);
+		double medianDistance = distances.get(distances.size() / 2);
+		List<Integer> dxList = new ArrayList<>();
+		List<Integer> dyList = new ArrayList<>();
+		for (int i = 0; i < associateTarget.getMatches().size(); i++) {
+			AssociatedIndex ai = associateTarget.getMatches().get(i);
+			Point2D_F64 refPoint = pointsRef.get(ai.src);
+			Point2D_F64 imagePoint = pointsImage.get(ai.dst);
+			if (Math.abs(refPoint.distance(imagePoint) - medianDistance) < 10) {
+				dxList.add(((int) imagePoint.x + TARGET_REGION_X) - (int) refPoint.x);
+				dyList.add(((int) imagePoint.y + TARGET_REGION_Y) - (int) refPoint.y);
+			}
+		}
+		nMedianTarget = dxList.size();
+		if (nMedianTarget < (nMatchesTarget / 2)) { // If scattered all around the feature probably isn't visible
+			return null;
+		}
+		Collections.sort(dxList);
+		Collections.sort(dyList);
+		int medianDx = dxList.get(dxList.size() / 2);
+		int medianDy = dyList.get(dyList.size() / 2);
+		targetX = (CruiseControlApplication.SCALED_WIDTH / 2) + medianDx;
+		targetY = (CruiseControlApplication.SCALED_HEIGHT / 2) + medianDy;
+		targetPercentX = (targetX * 100) / CruiseControlApplication.SCALED_WIDTH;
+		targetPercentY = (targetY * 100) / CruiseControlApplication.SCALED_HEIGHT;
+		return new Point(targetX, targetY);
 	}
 
 	private void loadRefImages() {
@@ -1027,6 +1132,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			this.refElevenSeconds = Template.fromFile(new File(refDir, "eleven_seconds.png"));
 			this.refScanning = Template.fromFile(new File(refDir, "scanning_blurred.png"));
 			this.refScanningType9 = Template.fromFile(new File(refDir, "scanning_type9_blurred.png"));
+
+			detDescTarget.detect(ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "target_yellow_feature.png")), (GrayF32) null)));
+			for (int i = 0; i < detDescTarget.getNumberOfFeatures(); i++) {
+				pointsRef.add(detDescTarget.getLocation(i).copy());
+				descRef.grow().setTo(detDescTarget.getDescription(i));
+			}
+			logger.debug("Found " + detDescTarget.getNumberOfFeatures() + " features in target_yellow_feature");
 		} catch (IOException e) {
 			throw new RuntimeException("Failed to load ref images", e);
 		}
@@ -1052,10 +1164,17 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		g.setColor(new Color(64, 64, 64));
 		g.drawRect(TARGET_REGION_X, TARGET_REGION_Y, TARGET_REGION_WIDTH, TARGET_REGION_HEIGHT);
 
-		if (targetMatch != null) {
-			g.setColor(new Color(128, 128, 128));
-			g.drawRect(targetMatch.getX(), targetMatch.getY(), targetMatch.getWidth(), targetMatch.getHeight());
-			g.drawString(String.format(Locale.US, "%.4f", targetMatch.getErrorPerPixel()), targetMatch.getX(), targetMatch.getY());
+		if (targetX != null && targetY != null) {
+			g.setColor(Color.YELLOW);
+			g.setStroke(new BasicStroke(3));
+			g.drawLine(CruiseControlApplication.SCALED_WIDTH / 2, CruiseControlApplication.SCALED_HEIGHT / 2, targetX, targetY);
+			g.setStroke(new BasicStroke(1));
+			g.drawString(String.format(Locale.US, "%d,%d", targetX, targetY), targetX, targetY);
+		}
+
+		if (sixSecondsRegionX != null && sixSecondsRegionY != null) {
+			g.setColor(new Color(0, 0, 127));
+			g.drawRect(sixSecondsRegionX, sixSecondsRegionY, sixSecondsRegionWidth, sixSecondsRegionHeight);
 		}
 
 		if (sixSecondsMatch != null) {
@@ -1139,6 +1258,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			}
 		}
 		g.drawString(sbScanned.toString(), 10, 330);
+		g.drawString(String.format(Locale.US, "feat=%d / match=%d / med=%d", this.nFeaturesTarget, this.nMatchesTarget, this.nMedianTarget), 10, 360);
 
 		g.dispose();
 	}
@@ -1148,7 +1268,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			for (int x = 0; x < debugImage.getWidth(); x++) {
 				float r = redHudImage.unsafe_get(x, y) * 255;
 				float bw = blueWhiteHudImage.unsafe_get(x, y) * 255;
-				float ye = yellowHudImage.unsafe_get(x, y) * 255; // TODO Draw yellow on debug image
+				float ye = yellowHudImage.unsafe_get(x, y) * 255;
 				float o = orangeHudImage.unsafe_get(x, y) * 255;
 				float b = brightImage.unsafe_get(x, y) * 255;
 				if (r > 0) {
@@ -1223,6 +1343,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				this.doEmergencyExit(REASON_END_OF_PLOTTED_ROUTE);
 			}
 		} else if (event instanceof StartJumpEvent) {
+			StartJumpEvent startJumpEvent = (StartJumpEvent) event;
 			this.shipControl.stopTurning();
 			this.inHyperspaceSince = System.currentTimeMillis();
 			this.currentSystemName = "";
@@ -1232,11 +1353,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			this.sysmapScannerResult = null;
 			this.lastScannedBodyAt = 0;
 			this.lastScannedBodyDistanceFromArrival = 0;
-			this.jumpTargetIsScoopable = StarClass.fromJournalValue(((StartJumpEvent) event).getStarClass()).isScoopable();
+			this.jumpTargetIsScoopable = StringUtils.isEmpty(startJumpEvent.getStarClass()) ? false : StarClass.fromJournalValue(startJumpEvent.getStarClass()).isScoopable();
 			this.gameState = GameState.IN_HYPERSPACE;
-			logger.debug("Jumping through hyperspace to " + ((StartJumpEvent) event).getStarSystem());
+			logger.debug("Jumping through hyperspace to " + startJumpEvent.getStarSystem());
 		} else if (event instanceof FSDJumpEvent) {
-			this.loadRefImages();
 			this.fuelLevel = ((FSDJumpEvent) event).getFuelLevel().floatValue();
 			this.inHyperspaceSince = Long.MAX_VALUE;
 			this.shipControl.honkDelayed(1000);

@@ -92,7 +92,7 @@ public class ScreenConverterThread extends Thread {
 					orangeHudImage.unsafe_set(x, y, 0);
 				}
 
-				if ((s > 0.9f) && (v >= 0.9f) && (h >= 0.5f && h < 1.0f)) {
+				if ((s > 0.6f) && (v >= 0.85f) && (h >= 0.5f && h < 1.0f)) {
 					// Yellow
 					yellowHudImage.unsafe_set(x, y, v);
 				} else {
