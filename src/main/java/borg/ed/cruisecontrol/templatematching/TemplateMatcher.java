@@ -101,29 +101,45 @@ public class TemplateMatcher {
 	public static TemplateMatch findBestMatchingLocationInRegionSmarter(GrayF32 image, int x, int y, int width, int height, Template template, float maxErrorPerPixel) {
 		GrayF32 subimage = image.subimage(x, y, x + width, y + height);
 		TemplateMatch m = TemplateMatcher.findBestMatchingLocationSmarter(subimage, template, maxErrorPerPixel);
-		return new TemplateMatch(m.getImage(), m.getTemplate(), m.getX() + x, m.getY() + y, m.getWidth(), m.getHeight(), m.getError(), m.getErrorPerPixel());
+		return m == null ? null : new TemplateMatch(m.getImage(), m.getTemplate(), m.getX() + x, m.getY() + y, m.getWidth(), m.getHeight(), m.getError(), m.getErrorPerPixel());
 	}
 
 	public static TemplateMatch findBestMatchingLocationSmarter(GrayF32 image, Template t, float maxErrorPerPixel) {
-		TemplateMatch bestMatch = null;
+		final GrayF32 template = t.getPixels();
+		final GrayF32 mask = t.getMask();
 
-		GrayF32 template = t.getPixels();
-		GrayF32 mask = t.getMask();
+		final int scanHeight = image.height - template.height;
+		final int scanWidth = image.width - template.width;
 
-		final int minPixels = (template.width * template.height) / 25;
+		final TemplateMatchIncomplete[][] incompleteMatches = new TemplateMatchIncomplete[scanHeight + 1][scanWidth + 1];
+		for (int yInImage = 0; yInImage <= scanHeight; yInImage++) {
+			for (int xInImage = 0; xInImage <= scanWidth; xInImage++) {
+				incompleteMatches[yInImage][xInImage] = new TemplateMatchIncomplete();
+			}
+		}
+
+		//		int maskPixels = 0;
+		//		for (int yInTemplate = 0; yInTemplate < template.height; yInTemplate++) {
+		//			for (int xInTemplate = 0; xInTemplate < template.width; xInTemplate++) {
+		//				final float maskValue = mask == null ? 1 : mask.data[mask.startIndex + yInTemplate * mask.stride + xInTemplate];
+		//				if (maskValue != 0) {
+		//					maskPixels++;
+		//				}
+		//			}
+		//		}
 
 		Set<Point> nonBlackPoints = new HashSet<>(1000);
-		for (int yInImage = 0; yInImage <= image.height; yInImage++) {
-			for (int xInImage = 0; xInImage <= image.width; xInImage++) {
-				if (image.unsafe_get(xInImage, yInImage) > 0) {
+		for (int yInImage = 0; yInImage < image.height; yInImage++) {
+			for (int xInImage = 0; xInImage < image.width; xInImage++) {
+				if (image.data[image.startIndex + yInImage * image.stride + xInImage] > 0) {
 					nonBlackPoints.add(new Point(xInImage, yInImage));
 				}
 			}
 		}
 
 		Set<Point> scanPoints = new HashSet<>(nonBlackPoints.size());
-		for (int yInImage = 0; yInImage <= image.height; yInImage++) {
-			for (int xInImage = 0; xInImage <= image.width; xInImage++) {
+		for (int yInImage = 0; yInImage < image.height; yInImage++) {
+			for (int xInImage = 0; xInImage < image.width; xInImage++) {
 				Point scanPoint = new Point(xInImage, yInImage);
 				for (Point nonBlackPoint : nonBlackPoints) {
 					int dx = Math.abs(nonBlackPoint.x - scanPoint.x);
@@ -137,37 +153,123 @@ public class TemplateMatcher {
 			}
 		}
 
-		float bestError = 999999999.9f;
-		float bestErrorPerPixel = 999999999.9f;
-		for (int yInImage = 0; yInImage <= (image.height - template.height); yInImage++) {
-			for (int xInImage = 0; xInImage <= (image.width - template.width); xInImage++) {
-				if (scanPoints.contains(new Point(xInImage, yInImage))) {
-					float error = 0.0f;
-					int pixels = 0;
-					for (int yInTemplate = 0; yInTemplate < template.height && error < bestError && (pixels < minPixels || error / pixels < maxErrorPerPixel); yInTemplate++) {
-						for (int xInTemplate = 0; xInTemplate < template.width && error < bestError && (pixels < minPixels || error / pixels < maxErrorPerPixel); xInTemplate++) {
-							float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
-							if (maskValue > 0) {
-								float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
-								float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
-								float diff = vImage - vTemplate;
-								error += (diff * diff) * maskValue;
-								pixels++;
-							}
-						}
-					}
-					float errorPerPixel = error / pixels;
-					if (errorPerPixel < bestErrorPerPixel) {
-						bestError = error;
-						bestErrorPerPixel = errorPerPixel;
-						bestMatch = new TemplateMatch(image, t, xInImage, yInImage, template.width, template.height, error, errorPerPixel);
+		for (int yInTemplate = 0; yInTemplate < template.height; yInTemplate++) {
+			for (int xInTemplate = 0; xInTemplate < template.width; xInTemplate++) {
+				final float maskValue = mask == null ? 1 : mask.data[mask.startIndex + yInTemplate * mask.stride + xInTemplate];
+				if (maskValue != 0) {
+					final float vTemplate = template.data[template.startIndex + yInTemplate * template.stride + xInTemplate];
+					for (Point scanPoint : scanPoints) {
+						//					for (int yInImage = 0; yInImage <= scanHeight; yInImage++) {
+						//						for (int xInImage = 0; xInImage <= scanWidth; xInImage++) {
+						TemplateMatchIncomplete incompleteMatch = incompleteMatches[scanPoint.y][scanPoint.x];
+						//							if (incompleteMatch.valid) {
+						float vImage = image.data[image.startIndex + (scanPoint.y + yInTemplate) * image.stride + (scanPoint.x + xInTemplate)];
+						float diff = vImage - vTemplate;
+						incompleteMatch.error += (diff * diff);
+						incompleteMatch.pixels++;
+						//								if (incompleteMatch.pixels > minPixels) {
+						//									if (incompleteMatch.error / incompleteMatch.pixels > maxErrorPerPixel) {
+						//										incompleteMatch.valid = false;
+						//									}
+						//								}
+						//							}
+						//						}
+						//					}
 					}
 				}
 			}
 		}
 
+		TemplateMatch bestMatch = null;
+		for (int yInImage = 0; yInImage <= scanHeight; yInImage++) {
+			for (int xInImage = 0; xInImage <= scanWidth; xInImage++) {
+				TemplateMatchIncomplete incompleteMatch = incompleteMatches[yInImage][xInImage];
+				//				if (incompleteMatch.valid) {
+				if (incompleteMatch.pixels > 0) {
+					float errorPerPixel = incompleteMatch.error / incompleteMatch.pixels;
+					if (errorPerPixel <= maxErrorPerPixel) {
+						if (bestMatch == null || errorPerPixel < bestMatch.getErrorPerPixel()) {
+							bestMatch = new TemplateMatch(image, t, xInImage, yInImage, template.width, template.height, incompleteMatch.error, errorPerPixel);
+						}
+					}
+				}
+			}
+		}
 		return bestMatch;
 	}
+
+	static class TemplateMatchIncomplete {
+		//		boolean valid = true;
+		int x = 0;
+		int y = 0;
+		float error = 0;
+		int pixels = 0;
+	}
+
+	//	public static TemplateMatch findBestMatchingLocationSmarter(GrayF32 image, Template t, float maxErrorPerPixel) {
+	//		TemplateMatch bestMatch = null;
+	//
+	//		GrayF32 template = t.getPixels();
+	//		GrayF32 mask = t.getMask();
+	//
+	//		final int minPixels = (template.width * template.height) / 25;
+	//
+	//		Set<Point> nonBlackPoints = new HashSet<>(1000);
+	//		for (int yInImage = 0; yInImage <= image.height; yInImage++) {
+	//			for (int xInImage = 0; xInImage <= image.width; xInImage++) {
+	//				if (image.unsafe_get(xInImage, yInImage) > 0) {
+	//					nonBlackPoints.add(new Point(xInImage, yInImage));
+	//				}
+	//			}
+	//		}
+	//
+	//		Set<Point> scanPoints = new HashSet<>(nonBlackPoints.size());
+	//		for (int yInImage = 0; yInImage <= image.height; yInImage++) {
+	//			for (int xInImage = 0; xInImage <= image.width; xInImage++) {
+	//				Point scanPoint = new Point(xInImage, yInImage);
+	//				for (Point nonBlackPoint : nonBlackPoints) {
+	//					int dx = Math.abs(nonBlackPoint.x - scanPoint.x);
+	//					if (dx <= template.width) {
+	//						int dy = Math.abs(nonBlackPoint.y - scanPoint.y);
+	//						if (dy <= template.height) {
+	//							scanPoints.add(scanPoint);
+	//						}
+	//					}
+	//				}
+	//			}
+	//		}
+	//
+	//		float bestError = 999999999.9f;
+	//		float bestErrorPerPixel = 999999999.9f;
+	//		for (int yInImage = 0; yInImage <= (image.height - template.height); yInImage++) {
+	//			for (int xInImage = 0; xInImage <= (image.width - template.width); xInImage++) {
+	//				if (scanPoints.contains(new Point(xInImage, yInImage))) {
+	//					float error = 0.0f;
+	//					int pixels = 0;
+	//					for (int yInTemplate = 0; yInTemplate < template.height && error < bestError && (pixels < minPixels || error / pixels < maxErrorPerPixel); yInTemplate++) {
+	//						for (int xInTemplate = 0; xInTemplate < template.width && error < bestError && (pixels < minPixels || error / pixels < maxErrorPerPixel); xInTemplate++) {
+	//							float maskValue = mask == null ? 1 : mask.unsafe_get(xInTemplate, yInTemplate);
+	//							if (maskValue > 0) {
+	//								float vImage = image.unsafe_get(xInImage + xInTemplate, yInImage + yInTemplate);
+	//								float vTemplate = template.unsafe_get(xInTemplate, yInTemplate);
+	//								float diff = vImage - vTemplate;
+	//								error += (diff * diff) * maskValue;
+	//								pixels++;
+	//							}
+	//						}
+	//					}
+	//					float errorPerPixel = error / pixels;
+	//					if (errorPerPixel < bestErrorPerPixel) {
+	//						bestError = error;
+	//						bestErrorPerPixel = errorPerPixel;
+	//						bestMatch = new TemplateMatch(image, t, xInImage, yInImage, template.width, template.height, error, errorPerPixel);
+	//					}
+	//				}
+	//			}
+	//		}
+	//
+	//		return bestMatch;
+	//	}
 
 	public static TemplateMatch findBestMatchingLocationInRegionSmart(GrayF32 image, int x, int y, int width, int height, Template template, int startX, int startY, float maxErrorPerPixel) {
 		GrayF32 subimage = image.subimage(x, y, x + width, y + height);
