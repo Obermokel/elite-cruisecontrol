@@ -1074,7 +1074,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		associateTarget.setDestination(descImage);
 		associateTarget.associate();
 		nMatchesTarget = associateTarget.getMatches().size();
-		logger.debug("Found " + nMatchesTarget + " matches, source.size=" + descRef.size());
 		if (nMatchesTarget < 7) { // We need something to work with
 			return null;
 		}
