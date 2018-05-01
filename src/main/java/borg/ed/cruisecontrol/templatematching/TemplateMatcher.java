@@ -53,9 +53,13 @@ public class TemplateMatcher {
 	//    }
 
 	public static TemplateMatch findBestMatchingLocationInRegion(GrayF32 image, int x, int y, int width, int height, Template template) {
-		GrayF32 subimage = image.subimage(x, y, x + width, y + height);
-		TemplateMatch m = TemplateMatcher.findBestMatchingLocation(subimage, template);
-		return new TemplateMatch(m.getImage(), m.getTemplate(), m.getX() + x, m.getY() + y, m.getWidth(), m.getHeight(), m.getError(), m.getErrorPerPixel());
+		try {
+			GrayF32 subimage = image.subimage(x, y, x + width, y + height);
+			TemplateMatch m = TemplateMatcher.findBestMatchingLocation(subimage, template);
+			return new TemplateMatch(m.getImage(), m.getTemplate(), m.getX() + x, m.getY() + y, m.getWidth(), m.getHeight(), m.getError(), m.getErrorPerPixel());
+		} catch (IllegalArgumentException e) {
+			return null;
+		}
 	}
 
 	//    public static TemplateMatch findBestMatchingLocation(GrayF32 image, GrayF32 template) {
