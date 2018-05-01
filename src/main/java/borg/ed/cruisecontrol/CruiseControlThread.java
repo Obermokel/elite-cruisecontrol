@@ -845,6 +845,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				return true;
 			}
 
+			// In any case stop rolling!
+			this.shipControl.setRollLeft(0);
+			this.shipControl.setRollRight(0);
+
 			// If the target indicator is visible it is generally already quite in the center.
 			// It will never be located at y=0% at the very top or any other edge, but rather in a range of
 			// 25% to 75%.
@@ -880,6 +884,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				} else {
 					this.shipControl.setPitchDown(5);
 				}
+			} else {
+				this.shipControl.setPitchUp(0);
+				this.shipControl.setPitchDown(0);
 			}
 
 			// >>>> X <<<<
@@ -911,10 +918,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				} else {
 					this.shipControl.setYawRight(5);
 				}
+			} else {
+				this.shipControl.setYawLeft(0);
+				this.shipControl.setYawRight(0);
 			}
 
 			// Keep turning but already return true if we are almost centered
-			if (xPercent >= 45 && xPercent <= 55 && yPercent >= 45 && yPercent <= 55) {
+			if (xPercent >= 42 && xPercent <= 58 && yPercent >= 42 && yPercent <= 58) {
 				return true;
 			}
 		}
@@ -952,6 +962,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				} else {
 					this.shipControl.setYawRight(100);
 				}
+				this.shipControl.setRollLeft(0);
+				this.shipControl.setRollRight(0);
 			} else {
 				// Controlled pitch
 				if (yPercent < 50) {
@@ -969,17 +981,17 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				}
 				// Roll/yaw to target
 				if (xPercent < 50) {
-					if (xPercent < 45) {
-						this.shipControl.setRollLeft(100);
-						this.shipControl.setYawLeft(0);
+					if (xPercent < 40) {
+						this.shipControl.setRollLeft(yPercent <= 50 ? 50 : -50);
+						this.shipControl.setYawLeft(50);
 					} else {
 						this.shipControl.setRollLeft(0);
 						this.shipControl.setYawLeft(Math.round(Math.max(25, (50 - xPercent) * 2)));
 					}
 				} else {
-					if (xPercent > 55) {
-						this.shipControl.setRollRight(100);
-						this.shipControl.setYawRight(0);
+					if (xPercent > 60) {
+						this.shipControl.setRollRight(yPercent <= 50 ? 50 : -50);
+						this.shipControl.setYawRight(50);
 					} else {
 						this.shipControl.setRollRight(0);
 						this.shipControl.setYawRight(Math.round(Math.max(25, (xPercent - 50) * 2)));
