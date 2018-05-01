@@ -97,8 +97,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private Template refNineSeconds = null;
 	private Template refTenSeconds = null;
 	private Template refElevenSeconds = null;
-	private Template refScanning = null;
-	private Template refScanningType9 = null;
 
 	private GameState gameState = GameState.UNKNOWN;
 	private Float xPercent = null;
@@ -136,7 +134,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	//private TemplateMatch targetMatch = null;
 
 	private TemplateMatch sixSecondsMatch = null;
-	private TemplateMatch scanningMatch = null;
 
 	private static Boolean inEmergencyExit = Boolean.FALSE;
 
@@ -332,17 +329,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				}
 			}
 
-			scanningMatch = TemplateMatcher.findBestMatchingLocationInRegion(orangeHudImage, 2, 860, 200, 130, this.refScanning);
-			TemplateMatch mType9 = TemplateMatcher.findBestMatchingLocationInRegion(orangeHudImage, 2, 860, 200, 130, this.refScanningType9);
-			if (mType9.getErrorPerPixel() < scanningMatch.getErrorPerPixel()) {
-				scanningMatch = mType9;
-			}
-			if (scanningMatch.getErrorPerPixel() > 0.11f) {
-				scanningMatch = null;
-			}
+			locateScanningFeature(orangeHudImage);
 		} else {
 			sixSecondsMatch = null;
-			scanningMatch = null;
+			scanningX = null;
+			scanningY = null;
 		}
 	}
 
@@ -598,7 +589,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					this.shipControl.setRollLeft((int) (10 * Math.random()));
 				}
 			} else {
-				if (scanningMatch != null) {
+				if (scanningX != null && scanningY != null) {
 					if (this.shipControl.getThrottle() != 0) {
 						this.shipControl.setThrottle(0);
 					}
@@ -607,6 +598,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						this.shipControl.setThrottle(75);
 					}
 				} else if (targetPercentX == null || targetPercentY == null) {
+					// May be occluded by a star, we must keep going at least slow.
+					// Otherwise we overshot a planet and will do one loop of shame after the other if we do not stand still...
 					if (this.shipControl.getThrottle() != 0) {
 						this.shipControl.setThrottle(0);
 					}
@@ -1077,12 +1070,89 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	//		return m.getErrorPerPixel() < 0.15f ? m : null;
 	//	}
 
+	DetectDescribePoint<GrayF32, BrightFeature> detDescScanning = FactoryDetectDescribe.surfStable(new ConfigFastHessian(0.0008f, 2, -1, 1, 9, 4, 4), null, null, GrayF32.class);
+	ScoreAssociation<BrightFeature> scorerScanning = FactoryAssociation.defaultScore(detDescScanning.getDescriptionType());
+	AssociateDescription<BrightFeature> associateScanning = FactoryAssociation.greedy(scorerScanning, Double.MAX_VALUE, true);
+
+	List<Point2D_F64> pointsScanningRef = new ArrayList<>();
+	FastQueue<BrightFeature> descScanningRef = UtilFeature.createQueue(detDescScanning, 100);
+
+	int nFeaturesScanning = -1; // Number of features detected in the captured (sub)image of the HUD
+	int nMatchesScanning = -1; // Number of features which could be matched to the reference image
+	int nMedianScanning = -1; // Number of matched features which are close to the median translation
+
+	Integer scanningX = null; // x of center of scanning indicator in image
+	Integer scanningY = null; // y of center of scanning indicator in image
+
+	private static final int SCANNING_REGION_X = 0;
+	private static final int SCANNING_REGION_Y = 765;
+	private static final int SCANNING_REGION_WIDTH = 375;
+	private static final int SCANNING_REGION_HEIGHT = 315;
+
+	private Point locateScanningFeature(GrayF32 orangeHudImage) {
+		nFeaturesScanning = -1;
+		nMatchesScanning = -1;
+		nMedianScanning = -1;
+		scanningX = null;
+		scanningY = null;
+
+		detDescScanning.detect(orangeHudImage.subimage(SCANNING_REGION_X, SCANNING_REGION_Y, SCANNING_REGION_X + SCANNING_REGION_WIDTH, SCANNING_REGION_Y + SCANNING_REGION_HEIGHT));
+		nFeaturesScanning = detDescScanning.getNumberOfFeatures();
+		if (nFeaturesScanning <= 0) {
+			return null;
+		}
+		List<Point2D_F64> pointsImage = new ArrayList<>();
+		FastQueue<BrightFeature> descImage = UtilFeature.createQueue(detDescScanning, 100);
+		for (int i = 0; i < detDescScanning.getNumberOfFeatures(); i++) {
+			pointsImage.add(detDescScanning.getLocation(i).copy());
+			descImage.grow().setTo(detDescScanning.getDescription(i));
+		}
+		associateScanning.setSource(descScanningRef);
+		associateScanning.setDestination(descImage);
+		associateScanning.associate();
+		nMatchesScanning = associateScanning.getMatches().size();
+		if (nMatchesScanning < 7) { // We need something to work with
+			return null;
+		}
+		List<Double> distances = new ArrayList<>();
+		for (int i = 0; i < associateScanning.getMatches().size(); i++) {
+			AssociatedIndex ai = associateScanning.getMatches().get(i);
+			Point2D_F64 refPoint = pointsScanningRef.get(ai.src);
+			Point2D_F64 imagePoint = pointsImage.get(ai.dst);
+			distances.add(refPoint.distance(imagePoint));
+		}
+		Collections.sort(distances);
+		double medianDistance = distances.get(distances.size() / 2);
+		List<Integer> dxList = new ArrayList<>();
+		List<Integer> dyList = new ArrayList<>();
+		for (int i = 0; i < associateScanning.getMatches().size(); i++) {
+			AssociatedIndex ai = associateScanning.getMatches().get(i);
+			Point2D_F64 refPoint = pointsScanningRef.get(ai.src);
+			Point2D_F64 imagePoint = pointsImage.get(ai.dst);
+			if (Math.abs(refPoint.distance(imagePoint) - medianDistance) < 10) {
+				dxList.add(((int) imagePoint.x + SCANNING_REGION_X) - (int) refPoint.x);
+				dyList.add(((int) imagePoint.y + SCANNING_REGION_Y) - (int) refPoint.y);
+			}
+		}
+		nMedianScanning = dxList.size();
+		if (nMedianScanning < (nMatchesScanning / 3)) { // If scattered all around the feature probably isn't visible
+			return null;
+		}
+		Collections.sort(dxList);
+		Collections.sort(dyList);
+		int medianDx = dxList.get(dxList.size() / 2);
+		int medianDy = dyList.get(dyList.size() / 2);
+		scanningX = (CruiseControlApplication.SCALED_WIDTH / 2) + medianDx;
+		scanningY = (CruiseControlApplication.SCALED_HEIGHT / 2) + medianDy;
+		return new Point(scanningX, scanningY);
+	}
+
 	DetectDescribePoint<GrayF32, BrightFeature> detDescTarget = FactoryDetectDescribe.surfStable(new ConfigFastHessian(0.0008f, 2, -1, 1, 9, 4, 4), null, null, GrayF32.class);
 	ScoreAssociation<BrightFeature> scorerTarget = FactoryAssociation.defaultScore(detDescTarget.getDescriptionType());
 	AssociateDescription<BrightFeature> associateTarget = FactoryAssociation.greedy(scorerTarget, Double.MAX_VALUE, true);
 
-	List<Point2D_F64> pointsRef = new ArrayList<>();
-	FastQueue<BrightFeature> descRef = UtilFeature.createQueue(detDescTarget, 100);
+	List<Point2D_F64> pointsTargetRef = new ArrayList<>();
+	FastQueue<BrightFeature> descTargetRef = UtilFeature.createQueue(detDescTarget, 100);
 
 	int nFeaturesTarget = -1; // Number of features detected in the captured (sub)image of the HUD
 	int nMatchesTarget = -1; // Number of features which could be matched to the reference image
@@ -1113,7 +1183,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			pointsImage.add(detDescTarget.getLocation(i).copy());
 			descImage.grow().setTo(detDescTarget.getDescription(i));
 		}
-		associateTarget.setSource(descRef);
+		associateTarget.setSource(descTargetRef);
 		associateTarget.setDestination(descImage);
 		associateTarget.associate();
 		nMatchesTarget = associateTarget.getMatches().size();
@@ -1123,7 +1193,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		List<Double> distances = new ArrayList<>();
 		for (int i = 0; i < associateTarget.getMatches().size(); i++) {
 			AssociatedIndex ai = associateTarget.getMatches().get(i);
-			Point2D_F64 refPoint = pointsRef.get(ai.src);
+			Point2D_F64 refPoint = pointsTargetRef.get(ai.src);
 			Point2D_F64 imagePoint = pointsImage.get(ai.dst);
 			distances.add(refPoint.distance(imagePoint));
 		}
@@ -1133,7 +1203,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		List<Integer> dyList = new ArrayList<>();
 		for (int i = 0; i < associateTarget.getMatches().size(); i++) {
 			AssociatedIndex ai = associateTarget.getMatches().get(i);
-			Point2D_F64 refPoint = pointsRef.get(ai.src);
+			Point2D_F64 refPoint = pointsTargetRef.get(ai.src);
 			Point2D_F64 imagePoint = pointsImage.get(ai.dst);
 			if (Math.abs(refPoint.distance(imagePoint) - medianDistance) < 10) {
 				dxList.add(((int) imagePoint.x + TARGET_REGION_X) - (int) refPoint.x);
@@ -1171,15 +1241,20 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			this.refNineSeconds = Template.fromFile(new File(refDir, "nine_seconds.png"));
 			this.refTenSeconds = Template.fromFile(new File(refDir, "ten_seconds.png"));
 			this.refElevenSeconds = Template.fromFile(new File(refDir, "eleven_seconds.png"));
-			this.refScanning = Template.fromFile(new File(refDir, "scanning_blurred.png"));
-			this.refScanningType9 = Template.fromFile(new File(refDir, "scanning_type9_blurred.png"));
 
 			detDescTarget.detect(ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "target_yellow_feature.png")), (GrayF32) null)));
 			for (int i = 0; i < detDescTarget.getNumberOfFeatures(); i++) {
-				pointsRef.add(detDescTarget.getLocation(i).copy());
-				descRef.grow().setTo(detDescTarget.getDescription(i));
+				pointsTargetRef.add(detDescTarget.getLocation(i).copy());
+				descTargetRef.grow().setTo(detDescTarget.getDescription(i));
 			}
 			logger.debug("Found " + detDescTarget.getNumberOfFeatures() + " features in target_yellow_feature");
+
+			detDescScanning.detect(ImageUtil.normalize255(ConvertBufferedImage.convertFrom(ImageIO.read(new File(refDir, "scanning_feature.png")), (GrayF32) null)));
+			for (int i = 0; i < detDescScanning.getNumberOfFeatures(); i++) {
+				pointsScanningRef.add(detDescScanning.getLocation(i).copy());
+				descScanningRef.grow().setTo(detDescScanning.getDescription(i));
+			}
+			logger.debug("Found " + detDescScanning.getNumberOfFeatures() + " features in scanning_feature");
 		} catch (IOException e) {
 			throw new RuntimeException("Failed to load ref images", e);
 		}
@@ -1225,10 +1300,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			g.drawString(String.format(Locale.US, "%.4f", sixSecondsMatch.getErrorPerPixel()), sixSecondsMatch.getX(), sixSecondsMatch.getY());
 		}
 
-		if (scanningMatch != null) {
+		if (scanningX != null && scanningY != null) {
 			g.setColor(Color.RED);
-			g.drawRect(scanningMatch.getX(), scanningMatch.getY(), scanningMatch.getWidth(), scanningMatch.getHeight());
-			g.drawString(String.format(Locale.US, "%.4f", scanningMatch.getErrorPerPixel()), scanningMatch.getX(), scanningMatch.getY());
+			g.drawRect(scanningX - 60, scanningY - 25, 120, 50);
+			g.drawString("SCANNING...", scanningX - 60, scanningY - 25);
 		}
 
 		g.setColor(Color.BLACK);
@@ -1300,7 +1375,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			}
 		}
 		g.drawString(sbScanned.toString(), 10, 330);
-		g.drawString(String.format(Locale.US, "feat=%d / match=%d / med=%d", this.nFeaturesTarget, this.nMatchesTarget, this.nMedianTarget), 10, 360);
+		g.drawString(String.format(Locale.US, "[target] feat=%d / match=%d / med=%d", this.nFeaturesTarget, this.nMatchesTarget, this.nMedianTarget), 10, 360);
+		g.drawString(String.format(Locale.US, "[scanning] feat=%d / match=%d / med=%d", this.nFeaturesScanning, this.nMatchesScanning, this.nMedianScanning), 10, 390);
 
 		g.dispose();
 	}
