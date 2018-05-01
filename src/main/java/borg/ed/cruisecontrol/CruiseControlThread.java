@@ -89,7 +89,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private Template refCompassType9 = null;
 	private Template refCompassDotFilled = null;
 	private Template refCompassDotHollow = null;
-	private Template refTarget = null;
 	private Template refShipHud = null;
 	private Template refShipHudType9 = null;
 	private Template refSixSeconds = null;
@@ -102,8 +101,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private Template refScanningType9 = null;
 
 	private GameState gameState = GameState.UNKNOWN;
-	private int xPercent = 0;
-	private int yPercent = 0;
+	private Float xPercent = null;
+	private Float yPercent = null;
 	private float brightnessAhead = 0;
 	private boolean scoopingFuel = false;
 	private boolean fsdCooldown = false;
@@ -848,40 +847,80 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			xPercent = targetPercentX;
 			yPercent = targetPercentY;
 
-			if (xPercent >= 49 && xPercent <= 51 && yPercent >= 49 && yPercent <= 51) {
+			if (xPercent >= 49.5f && xPercent <= 50.5f && yPercent >= 49.5f && yPercent <= 50.5f) {
 				this.shipControl.stopTurning();
 				return true;
 			}
 
-			// Controlled pitch
-			if (yPercent < 50) {
+			// If the target indicator is visible it is generally already quite in the center.
+			// It will never be located at y=0% at the very top or any other edge, but rather in a range of
+			// 25% to 75%.
+
+			// >>>> Y <<<<
+			if (yPercent < 49.5f) {
+				// Target is _above_ center, we need to pitch up
 				if (yPercent < 25) {
-					this.shipControl.setPitchUp(100);
+					this.shipControl.setPitchUp(50);
+				} else if (yPercent < 30) {
+					this.shipControl.setPitchUp(40);
+				} else if (yPercent < 35) {
+					this.shipControl.setPitchUp(30);
+				} else if (yPercent < 40) {
+					this.shipControl.setPitchUp(20);
+				} else if (yPercent < 45) {
+					this.shipControl.setPitchUp(10);
 				} else {
-					this.shipControl.setPitchUp(Math.max(5, (50 - yPercent) * 2));
+					this.shipControl.setPitchUp(5);
 				}
-			} else {
+			} else if (yPercent > 50.5f) {
+				// Target is _below_ center, we need to pitch down
 				if (yPercent > 75) {
-					this.shipControl.setPitchDown(100);
+					this.shipControl.setPitchDown(50);
+				} else if (yPercent > 70) {
+					this.shipControl.setPitchDown(40);
+				} else if (yPercent > 65) {
+					this.shipControl.setPitchDown(30);
+				} else if (yPercent > 60) {
+					this.shipControl.setPitchDown(20);
+				} else if (yPercent > 55) {
+					this.shipControl.setPitchDown(10);
 				} else {
-					this.shipControl.setPitchDown(Math.max(5, (yPercent - 50) * 2));
-				}
-			}
-			// Roll to target
-			if (xPercent < 50) {
-				if (xPercent < 45) {
-					this.shipControl.setYawLeft(100);
-				} else {
-					this.shipControl.setYawLeft(Math.max(15, (50 - xPercent) * 2));
-				}
-			} else {
-				if (xPercent > 55) {
-					this.shipControl.setYawRight(100);
-				} else {
-					this.shipControl.setYawRight(Math.max(15, (xPercent - 50) * 2));
+					this.shipControl.setPitchDown(5);
 				}
 			}
 
+			// >>>> X <<<<
+			if (xPercent < 49.5f) {
+				if (xPercent < 25) {
+					this.shipControl.setYawLeft(60);
+				} else if (xPercent < 30) {
+					this.shipControl.setYawLeft(45);
+				} else if (xPercent < 35) {
+					this.shipControl.setYawLeft(30);
+				} else if (xPercent < 40) {
+					this.shipControl.setYawLeft(20);
+				} else if (xPercent < 45) {
+					this.shipControl.setYawLeft(10);
+				} else {
+					this.shipControl.setYawLeft(5);
+				}
+			} else if (xPercent > 50.5f) {
+				if (xPercent > 75) {
+					this.shipControl.setYawRight(60);
+				} else if (xPercent > 70) {
+					this.shipControl.setYawRight(45);
+				} else if (xPercent > 65) {
+					this.shipControl.setYawRight(30);
+				} else if (xPercent > 60) {
+					this.shipControl.setYawRight(20);
+				} else if (xPercent > 55) {
+					this.shipControl.setYawRight(10);
+				} else {
+					this.shipControl.setYawRight(5);
+				}
+			}
+
+			// Keep turning but already return true if we are almost centered
 			if (xPercent >= 45 && xPercent <= 55 && yPercent >= 45 && yPercent <= 55) {
 				return true;
 			}
@@ -899,8 +938,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			int height = compassMatch.getHeight();
 			int x = (compassDotMatch.getX() - compassMatch.getX()) + (compassDotMatch.getWidth() / 2);
 			int y = (compassDotMatch.getY() - compassMatch.getY()) + (compassDotMatch.getHeight() / 2);
-			xPercent = (x * 100) / width;
-			yPercent = (y * 100) / height;
+			xPercent = (x * 100f) / width;
+			yPercent = (y * 100f) / height;
 
 			if (!hollow && xPercent >= 48 && xPercent <= 52 && yPercent >= 48 && yPercent <= 52) {
 				this.shipControl.stopTurning();
@@ -926,27 +965,31 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					if (yPercent < 25) {
 						this.shipControl.setPitchUp(100);
 					} else {
-						this.shipControl.setPitchUp(Math.max(10, (50 - yPercent) * 2));
+						this.shipControl.setPitchUp(Math.round(Math.max(10, (50 - yPercent) * 2)));
 					}
 				} else {
 					if (yPercent > 75) {
 						this.shipControl.setPitchDown(100);
 					} else {
-						this.shipControl.setPitchDown(Math.max(10, (yPercent - 50) * 2));
+						this.shipControl.setPitchDown(Math.round(Math.max(10, (yPercent - 50) * 2)));
 					}
 				}
-				// Roll to target
+				// Roll/yaw to target
 				if (xPercent < 50) {
 					if (xPercent < 45) {
-						this.shipControl.setYawLeft(100);
+						this.shipControl.setRollLeft(100);
+						this.shipControl.setYawLeft(0);
 					} else {
-						this.shipControl.setYawLeft(Math.max(25, (50 - xPercent) * 2));
+						this.shipControl.setRollLeft(0);
+						this.shipControl.setYawLeft(Math.round(Math.max(25, (50 - xPercent) * 2)));
 					}
 				} else {
 					if (xPercent > 55) {
-						this.shipControl.setYawRight(100);
+						this.shipControl.setRollRight(100);
+						this.shipControl.setYawRight(0);
 					} else {
-						this.shipControl.setYawRight(Math.max(25, (xPercent - 50) * 2));
+						this.shipControl.setRollRight(0);
+						this.shipControl.setYawRight(Math.round(Math.max(25, (xPercent - 50) * 2)));
 					}
 				}
 			}
@@ -964,8 +1007,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			int height = compassMatch.getHeight();
 			int x = (compassDotMatch.getX() - compassMatch.getX()) + (compassDotMatch.getWidth() / 2);
 			int y = (compassDotMatch.getY() - compassMatch.getY()) + (compassDotMatch.getHeight() / 2);
-			xPercent = (x * 100) / width;
-			yPercent = (y * 100) / height;
+			xPercent = (x * 100f) / width;
+			yPercent = (y * 100f) / height;
 
 			if (hollow && xPercent >= 45 && xPercent <= 55 && (yPercent > 80 || yPercent < 20)) {
 				this.shipControl.stopTurning();
@@ -990,17 +1033,17 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				if (yPercent < 50) {
 					// 10: slow pitch up
 					// 40: fast pitch up
-					this.shipControl.setPitchUp(Math.max(10, yPercent * 2));
+					this.shipControl.setPitchUp(Math.round(Math.max(10, yPercent * 2)));
 				} else {
 					// 60: fast pitch down
 					// 90: slow pitch down
-					this.shipControl.setPitchDown(Math.max(10, (50 - (yPercent - 50)) * 2));
+					this.shipControl.setPitchDown(Math.round(Math.max(10, (50 - (yPercent - 50)) * 2)));
 				}
 				// Roll to target
 				if (xPercent < 50) {
-					this.shipControl.setYawRight(Math.max(25, (50 - xPercent) * 2));
+					this.shipControl.setYawRight(Math.round(Math.max(25, (50 - xPercent) * 2)));
 				} else {
-					this.shipControl.setYawLeft(Math.max(25, (xPercent - 50) * 2));
+					this.shipControl.setYawLeft(Math.round(Math.max(25, (xPercent - 50) * 2)));
 				}
 			}
 		}
@@ -1047,8 +1090,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 	Integer targetX = null; // x of center of target indicator in image
 	Integer targetY = null; // y of center of target indicator in image
-	Integer targetPercentX = null; // percent to the right - 0%=left, 50%=centered, 100%=right
-	Integer targetPercentY = null; // percent to the bottom - 0%=top, 50%=centered, 100%=bottom
+	Float targetPercentX = null; // percent to the right - 0%=left, 50%=centered, 100%=right
+	Float targetPercentY = null; // percent to the bottom - 0%=top, 50%=centered, 100%=bottom
 
 	private Point locateTargetFeature(GrayF32 yellowHudImage) {
 		nFeaturesTarget = -1;
@@ -1107,8 +1150,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		int medianDy = dyList.get(dyList.size() / 2);
 		targetX = (CruiseControlApplication.SCALED_WIDTH / 2) + medianDx;
 		targetY = (CruiseControlApplication.SCALED_HEIGHT / 2) + medianDy;
-		targetPercentX = (targetX * 100) / CruiseControlApplication.SCALED_WIDTH;
-		targetPercentY = (targetY * 100) / CruiseControlApplication.SCALED_HEIGHT;
+		targetPercentX = (targetX * 100f) / CruiseControlApplication.SCALED_WIDTH;
+		targetPercentY = (targetY * 100f) / CruiseControlApplication.SCALED_HEIGHT;
 		return new Point(targetX, targetY);
 	}
 
@@ -1120,7 +1163,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			this.refCompassType9 = Template.fromFile(new File(refDir, "compass_type9_blurred.png"));
 			this.refCompassDotFilled = Template.fromFile(new File(refDir, "compass_dot_filled_bluewhite_blurred.png"));
 			this.refCompassDotHollow = Template.fromFile(new File(refDir, "compass_dot_hollow_bluewhite_blurred.png"));
-			this.refTarget = Template.fromFile(new File(refDir, "target_yellow.png"));
 			this.refShipHud = Template.fromFile(new File(refDir, "ship_hud_blurred.png"));
 			this.refShipHudType9 = Template.fromFile(new File(refDir, "ship_hud_type9_blurred.png"));
 			this.refSixSeconds = Template.fromFile(new File(refDir, "six_seconds.png"));
@@ -1167,8 +1209,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			g.setColor(Color.YELLOW);
 			g.setStroke(new BasicStroke(3));
 			g.drawLine(CruiseControlApplication.SCALED_WIDTH / 2, CruiseControlApplication.SCALED_HEIGHT / 2, targetX, targetY);
+			g.fillOval(CruiseControlApplication.SCALED_WIDTH / 2 - 3, CruiseControlApplication.SCALED_HEIGHT / 2 - 3, 7, 7);
 			g.setStroke(new BasicStroke(1));
-			g.drawString(String.format(Locale.US, "%d,%d", targetX, targetY), targetX, targetY);
+			//g.drawString(String.format(Locale.US, "%d,%d", targetX, targetY), targetX, targetY);
 		}
 
 		if (sixSecondsRegionX != null && sixSecondsRegionY != null) {
@@ -1204,7 +1247,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		g.setColor(new Color(170, 170, 250));
 		g.setFont(new Font("Sans Serif", Font.BOLD, 20));
 		g.drawString(String.format(Locale.US, "%.2f FPS / %s", fps, this.gameState), 10, 30);
-		g.drawString(String.format(Locale.US, "x=%d%% / y=%d%%", this.xPercent, this.yPercent), 10, 60);
+		g.drawString(String.format(Locale.US, "x=%.1f%% / y=%.1f%%", this.xPercent, this.yPercent), 10, 60);
 		g.drawString(String.format(Locale.US, "pitchUp=%d%% / pitchDown=%d%%", this.shipControl.getPitchUp(), this.shipControl.getPitchDown()), 10, 90);
 		g.drawString(String.format(Locale.US, "rollRight=%d%% / rollLeft=%d%%", this.shipControl.getRollRight(), this.shipControl.getRollLeft()), 10, 120);
 		g.drawString(String.format(Locale.US, "yawRight=%d%% / yawLeft=%d%%", this.shipControl.getYawRight(), this.shipControl.getYawLeft()), 10, 150);
