@@ -840,7 +840,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			xPercent = targetPercentX;
 			yPercent = targetPercentY;
 
-			if (xPercent >= 49.5f && xPercent <= 50.5f && yPercent >= 49.5f && yPercent <= 50.5f) {
+			if (xPercent >= 47.5f && xPercent <= 52.5f && yPercent >= 47.5f && yPercent <= 52.5f) {
 				this.shipControl.stopTurning();
 				return true;
 			}
@@ -867,7 +867,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				} else if (yPercent < 45) {
 					this.shipControl.setPitchUp(20);
 				} else {
-					this.shipControl.setPitchUp(10);
+					this.shipControl.setPitchUp(7);
 				}
 			} else if (yPercent > 50.5f) {
 				// Target is _below_ center, we need to pitch down
@@ -882,7 +882,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				} else if (yPercent > 55) {
 					this.shipControl.setPitchDown(20);
 				} else {
-					this.shipControl.setPitchDown(10);
+					this.shipControl.setPitchDown(7);
 				}
 			} else {
 				this.shipControl.setPitchUp(0);
@@ -902,7 +902,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				} else if (xPercent < 45) {
 					this.shipControl.setYawLeft(20);
 				} else {
-					this.shipControl.setYawLeft(10);
+					this.shipControl.setYawLeft(7);
 				}
 			} else if (xPercent > 50.5f) {
 				if (xPercent > 75) {
@@ -916,7 +916,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				} else if (xPercent > 55) {
 					this.shipControl.setYawRight(20);
 				} else {
-					this.shipControl.setYawRight(10);
+					this.shipControl.setYawRight(7);
 				}
 			} else {
 				this.shipControl.setYawLeft(0);
@@ -924,7 +924,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			}
 
 			// Keep turning but already return true if we are almost centered
-			if (xPercent >= 42 && xPercent <= 58 && yPercent >= 42 && yPercent <= 58) {
+			if (xPercent >= 45 && xPercent <= 55 && yPercent >= 45 && yPercent <= 55) {
 				return true;
 			}
 		}
