@@ -857,32 +857,32 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			if (yPercent < 49.5f) {
 				// Target is _above_ center, we need to pitch up
 				if (yPercent < 25) {
-					this.shipControl.setPitchUp(50);
+					this.shipControl.setPitchUp(75);
 				} else if (yPercent < 30) {
-					this.shipControl.setPitchUp(40);
+					this.shipControl.setPitchUp(50);
 				} else if (yPercent < 35) {
-					this.shipControl.setPitchUp(30);
+					this.shipControl.setPitchUp(40);
 				} else if (yPercent < 40) {
-					this.shipControl.setPitchUp(20);
+					this.shipControl.setPitchUp(30);
 				} else if (yPercent < 45) {
-					this.shipControl.setPitchUp(10);
+					this.shipControl.setPitchUp(20);
 				} else {
-					this.shipControl.setPitchUp(5);
+					this.shipControl.setPitchUp(10);
 				}
 			} else if (yPercent > 50.5f) {
 				// Target is _below_ center, we need to pitch down
 				if (yPercent > 75) {
-					this.shipControl.setPitchDown(50);
+					this.shipControl.setPitchDown(75);
 				} else if (yPercent > 70) {
-					this.shipControl.setPitchDown(40);
+					this.shipControl.setPitchDown(50);
 				} else if (yPercent > 65) {
-					this.shipControl.setPitchDown(30);
+					this.shipControl.setPitchDown(40);
 				} else if (yPercent > 60) {
-					this.shipControl.setPitchDown(20);
+					this.shipControl.setPitchDown(30);
 				} else if (yPercent > 55) {
-					this.shipControl.setPitchDown(10);
+					this.shipControl.setPitchDown(20);
 				} else {
-					this.shipControl.setPitchDown(5);
+					this.shipControl.setPitchDown(10);
 				}
 			} else {
 				this.shipControl.setPitchUp(0);
@@ -892,31 +892,31 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			// >>>> X <<<<
 			if (xPercent < 49.5f) {
 				if (xPercent < 25) {
-					this.shipControl.setYawLeft(60);
+					this.shipControl.setYawLeft(75);
 				} else if (xPercent < 30) {
-					this.shipControl.setYawLeft(45);
+					this.shipControl.setYawLeft(50);
 				} else if (xPercent < 35) {
-					this.shipControl.setYawLeft(30);
+					this.shipControl.setYawLeft(40);
 				} else if (xPercent < 40) {
-					this.shipControl.setYawLeft(20);
+					this.shipControl.setYawLeft(30);
 				} else if (xPercent < 45) {
-					this.shipControl.setYawLeft(10);
+					this.shipControl.setYawLeft(20);
 				} else {
-					this.shipControl.setYawLeft(5);
+					this.shipControl.setYawLeft(10);
 				}
 			} else if (xPercent > 50.5f) {
 				if (xPercent > 75) {
-					this.shipControl.setYawRight(60);
+					this.shipControl.setYawRight(75);
 				} else if (xPercent > 70) {
-					this.shipControl.setYawRight(45);
+					this.shipControl.setYawRight(50);
 				} else if (xPercent > 65) {
-					this.shipControl.setYawRight(30);
+					this.shipControl.setYawRight(40);
 				} else if (xPercent > 60) {
-					this.shipControl.setYawRight(20);
+					this.shipControl.setYawRight(30);
 				} else if (xPercent > 55) {
-					this.shipControl.setYawRight(10);
+					this.shipControl.setYawRight(20);
 				} else {
-					this.shipControl.setYawRight(5);
+					this.shipControl.setYawRight(10);
 				}
 			} else {
 				this.shipControl.setYawLeft(0);
