@@ -617,6 +617,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			break;
 		case WAIT_FOR_SYSTEM_MAP:
 			if (this.sysmapScanner.isUniversalCartographicsLogoVisible(rgb)) {
+				this.robot.mouseMove(1, 1);
+				Thread.sleep(3000); // Wait for graphics to settle
 				if (!this.clickOnNextBodyOnSystemMap(screenConverterResult)) {
 					this.currentSysmapBody.unexplored = false; // Mark as explored
 					if (this.nextBodyToScan() != null) {
