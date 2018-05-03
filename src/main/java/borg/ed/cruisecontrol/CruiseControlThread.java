@@ -104,6 +104,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private Float xPercent = null;
 	private Float yPercent = null;
 	private float brightnessAhead = 0;
+	private float brightnessAheadLeft = 0;
+	private float brightnessAheadRight = 0;
 	private boolean scoopingFuel = false;
 	private boolean fsdCooldown = false;
 	private float fuelLevel = 0;
@@ -208,7 +210,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				// <<<< SCREEN CAPTURE <<<<
 
 				// >>>> PROCESSING THE DATA >>>>
-				brightnessAhead = this.computeBrightnessAhead(brightImage);
+				this.computeBrightnessAhead(brightImage);
 				TemplateMatch compassDotMatch = this.searchForCompassAndTarget(orangeHudImage, yellowHudImage, blueWhiteHudImage, threadPool);
 				this.searchForSixSecondsOrScanning(orangeHudImage, yellowHudImage);
 				this.handleGameState(rgb, hsv, orangeHudImage, compassDotMatch, screenConverterResult);
@@ -348,7 +350,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		case FSD_CHARGING:
 			if (this.brightnessAhead > 0.15f) {
 				this.shipControl.setPitchDown(100);
-				this.shipControl.setRollLeft((int) (10 * Math.random()));
+				if (this.brightnessAheadLeft > this.brightnessAheadRight) {
+					this.shipControl.setRollLeft((int) (10 * Math.random()));
+				} else {
+					this.shipControl.setRollRight((int) (10 * Math.random()));
+				}
 				if (this.shipControl.getThrottle() != 75) {
 					this.shipControl.setThrottle(75);
 				}
@@ -426,7 +432,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			}
 			if (this.brightnessAhead > 0.10f) {
 				this.shipControl.setPitchDown(100);
-				this.shipControl.setRollLeft((int) (10 * Math.random()));
+				if (this.brightnessAheadLeft > this.brightnessAheadRight) {
+					this.shipControl.setRollLeft((int) (10 * Math.random()));
+				} else {
+					this.shipControl.setRollRight((int) (10 * Math.random()));
+				}
 			} else {
 				this.shipControl.stopTurning();
 			}
@@ -442,7 +452,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					this.shipControl.setThrottle(75);
 				}
 				this.shipControl.setPitchDown(100);
-				this.shipControl.setRollLeft((int) (10 * Math.random()));
+				if (this.brightnessAheadLeft > this.brightnessAheadRight) {
+					this.shipControl.setRollLeft((int) (10 * Math.random()));
+				} else {
+					this.shipControl.setRollRight((int) (10 * Math.random()));
+				}
 			} else {
 				this.shipControl.stopTurning();
 				if (this.shipControl.getThrottle() != 100) {
@@ -533,7 +547,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						this.shipControl.setThrottle(25);
 					}
 					this.shipControl.setPitchDown(100);
-					this.shipControl.setRollLeft((int) (10 * Math.random()));
+					if (this.brightnessAheadLeft > this.brightnessAheadRight) {
+						this.shipControl.setRollLeft((int) (10 * Math.random()));
+					} else {
+						this.shipControl.setRollRight((int) (10 * Math.random()));
+					}
 				}
 			} else {
 				if (targetPercentX != null && targetPercentY != null) {
@@ -588,7 +606,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						this.shipControl.setThrottle(25);
 					}
 					this.shipControl.setPitchDown(100);
-					this.shipControl.setRollLeft((int) (10 * Math.random()));
+					if (this.brightnessAheadLeft > this.brightnessAheadRight) {
+						this.shipControl.setRollLeft((int) (10 * Math.random()));
+					} else {
+						this.shipControl.setRollRight((int) (10 * Math.random()));
+					}
 				}
 			} else {
 				if (scanningX != null && scanningY != null) {
@@ -658,7 +680,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					this.shipControl.setThrottle(0);
 				}
 				this.shipControl.setPitchDown(100);
-				this.shipControl.setRollLeft((int) (10 * Math.random()));
+				if (this.brightnessAheadLeft > this.brightnessAheadRight) {
+					this.shipControl.setRollLeft((int) (10 * Math.random()));
+				} else {
+					this.shipControl.setRollRight((int) (10 * Math.random()));
+				}
 			} else {
 				if (targetPercentX != null && targetPercentY != null) {
 					if (this.shipControl.getThrottle() != 50) {
@@ -776,7 +802,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		}
 	}
 
-	private float computeBrightnessAhead(GrayF32 brightImage) {
+	private void computeBrightnessAhead(GrayF32 brightImage) {
+		final int halfWidth = brightImage.width / 2;
+
 		// Upper 2/3 of the screen
 		int stepX = (int) (brightImage.width / 32.0f);
 		int offX = stepX / 2;
@@ -785,6 +813,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 		float total = 32.0f * 12.0f;
 		float bright = 0.0f;
+		float brightLeft = 0.0f;
+		float brightRight = 0.0f;
 
 		for (int x = 0; x < 32; x++) {
 			for (int y = 0; y < 12; y++) {
@@ -792,6 +822,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				int myY = offY + y * stepY;
 				if (brightImage.unsafe_get(myX, myY) > 0) {
 					bright++;
+					if (myX < halfWidth) {
+						brightLeft++;
+					} else {
+						brightRight++;
+					}
 				}
 			}
 		}
@@ -810,6 +845,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				int myY = offY + y * stepY;
 				if (brightImage.unsafe_get(myX, myY) > 0) {
 					bright++;
+					if (myX < halfWidth) {
+						brightLeft++;
+					} else {
+						brightRight++;
+					}
 				}
 			}
 		}
@@ -817,7 +857,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		// Center 20% square of the screen
 		int squareSize = brightImage.height / 5;
 		stepX = squareSize / 10;
-		offX = (brightImage.width / 2) - (int) (4.5f * stepX);
+		offX = halfWidth - (int) (4.5f * stepX);
 		stepY = squareSize / 10;
 		offY = (brightImage.height / 2) - (int) (4.5f * stepY);
 
@@ -829,12 +869,19 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				int myY = offY + y * stepY;
 				if (brightImage.unsafe_get(myX, myY) > 0) {
 					bright++;
+					if (myX < halfWidth) {
+						brightLeft++;
+					} else {
+						brightRight++;
+					}
 				}
 			}
 		}
 
 		// Result
-		return bright / total;
+		this.brightnessAhead = bright / total;
+		this.brightnessAheadLeft = brightLeft / (total / 2);
+		this.brightnessAheadRight = brightRight / (total / 2);
 	}
 
 	private boolean alignToTargetInHud() {
@@ -1324,11 +1371,17 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 		g.setColor(Color.BLACK);
 		g.fillRect(debugImage.getWidth() - 20, 0, 20, debugImage.getHeight());
-		if (brightnessAhead > 0) {
-			int brightnessRed = 127 + (int) (128.0f * brightnessAhead);
-			int brightnessHeight = (int) (brightnessAhead * debugImage.getHeight());
+		if (brightnessAheadLeft > 0) {
+			int brightnessRed = 127 + (int) (128.0f * brightnessAheadLeft);
+			int brightnessHeight = (int) (brightnessAheadLeft * debugImage.getHeight());
 			g.setColor(new Color(brightnessRed, 127, 127));
-			g.fillRect(debugImage.getWidth() - 20, debugImage.getHeight() - brightnessHeight, 20, brightnessHeight);
+			g.fillRect(debugImage.getWidth() - 20, debugImage.getHeight() - brightnessHeight, 10, brightnessHeight);
+		}
+		if (brightnessAheadRight > 0) {
+			int brightnessRed = 127 + (int) (128.0f * brightnessAheadRight);
+			int brightnessHeight = (int) (brightnessAheadRight * debugImage.getHeight());
+			g.setColor(new Color(brightnessRed, 127, 127));
+			g.fillRect(debugImage.getWidth() - 10, debugImage.getHeight() - brightnessHeight, 10, brightnessHeight);
 		}
 		g.setColor(Color.YELLOW);
 		g.drawString(String.format(Locale.US, "%.0f%%", brightnessAhead * 100), debugImage.getWidth() - 25, 25);
