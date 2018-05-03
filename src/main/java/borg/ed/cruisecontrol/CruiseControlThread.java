@@ -29,6 +29,8 @@ import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.time.DateUtils;
+import org.apache.commons.lang.time.DurationFormatUtils;
 import org.ddogleg.struct.FastQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1392,6 +1394,41 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		g.drawString(String.format(Locale.US, "[target] feat=%d / match=%d / med=%d", this.nFeaturesTarget, this.nMatchesTarget, this.nMedianTarget), 10, 360);
 		g.drawString(String.format(Locale.US, "[scanning] feat=%d / match=%d / med=%d", this.nFeaturesScanning, this.nMatchesScanning, this.nMedianScanning), 10, 390);
 
+		// Payouts
+		g.setFont(new Font("Monospaced", Font.BOLD, 20));
+		String payoutSession = String.format(Locale.US, "+%,12dCR", CruiseControlApplication.explorationPayoutSession);
+		String payoutTotal = String.format(Locale.US, "=%,12dCR", CruiseControlApplication.explorationPayoutTotal);
+		int minX = Integer.MAX_VALUE;
+		int width = payoutTotal.length() * 18;
+		for (int y = 75; y <= 100; y += 25) {
+			for (int c = 0; c < payoutTotal.length(); c++) {
+				int x = ((1920 / 2) - ((payoutTotal.length() / 2) + 1) * 18) + (c * 18);
+				minX = Math.min(x, minX);
+				g.setColor(new Color(64, 64, 64, 128));
+				g.fillRect(x, y, 16, 22);
+				g.setColor(Color.RED);
+				if (y == 75) {
+					g.drawString(Character.toString(payoutSession.charAt(c)), x + 3, y + 17);
+				} else if (y == 100) {
+					g.drawString(Character.toString(payoutTotal.charAt(c)), x + 3, y + 17);
+				}
+			}
+		}
+
+		g.setColor(new Color(64, 64, 64, 128));
+		g.fillRect(minX, 50, width - 2, 22);
+		g.setFont(new Font("Sans Serif", Font.BOLD, 14));
+		g.setColor(Color.RED);
+		double hoursSinceStart = (System.currentTimeMillis() - CruiseControlApplication.APPLICATION_START) / (double) DateUtils.MILLIS_PER_HOUR;
+		g.drawString(String.format(Locale.US, "%.1f jumps/h, %.0f Ly/h, %.2fM CR/h", CruiseControlApplication.jumpsSession / hoursSinceStart,
+				CruiseControlApplication.lightyearsSession / hoursSinceStart, (CruiseControlApplication.explorationPayoutSession / hoursSinceStart) / 1_000_000), minX + 6, 66);
+		g.setColor(new Color(64, 64, 64, 128));
+		g.fillRect(minX, 125, width - 2, 22);
+		g.setFont(new Font("Sans Serif", Font.BOLD, 14));
+		g.setColor(Color.RED);
+		g.drawString(String.format(Locale.US, "%d jumps, %,.0f Ly, %s h", CruiseControlApplication.jumpsTotal, CruiseControlApplication.lightyearsTotal,
+				DurationFormatUtils.formatDuration(CruiseControlApplication.playtimeMillisLastDock + CruiseControlApplication.playtimeMillisSession, "H:mm")), minX + 6, 66 + 75);
+
 		g.dispose();
 	}
 
@@ -1436,7 +1473,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	public void onNewStatus(Status status) {
 		if (status == null) {
 			logger.warn("null status");
+		} else if (status.getTimestamp().toEpochSecond() * 1000 < CruiseControlApplication.APPLICATION_START) {
+			logger.debug(status.getTimestamp() + " = " + status.getTimestamp().toEpochSecond() * 1000 + " < " + CruiseControlApplication.APPLICATION_START);
+			return;
 		} else {
+			CruiseControlApplication.playtimeMillisSession = status.getTimestamp().toEpochSecond() * 1000 - CruiseControlApplication.APPLICATION_START;
+
 			if (status.isLowFuel()) {
 				this.doEmergencyExit("Low fuel");
 			} else if (status.isInDanger()) {
@@ -1470,6 +1512,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 	@Override
 	public void onNewJournalEntry(AbstractJournalEvent event) {
+		if (event.getTimestamp().toEpochSecond() * 1000 < CruiseControlApplication.APPLICATION_START) {
+			logger.debug(event.getTimestamp() + " = " + event.getTimestamp().toEpochSecond() * 1000 + " < " + CruiseControlApplication.APPLICATION_START);
+			return;
+		} else {
+			CruiseControlApplication.playtimeMillisSession = event.getTimestamp().toEpochSecond() * 1000 - CruiseControlApplication.APPLICATION_START;
+		}
+
 		if (event instanceof MusicEvent) {
 			if (MusicEvent.TRACK_DESTINATION_FROM_HYPERSPACE.equals(((MusicEvent) event).getMusicTrack()) && event.getTimestamp().isAfter(ZonedDateTime.now().minusMinutes(1))) {
 				this.doEmergencyExit(REASON_END_OF_PLOTTED_ROUTE);
@@ -1489,20 +1538,30 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			this.gameState = GameState.IN_HYPERSPACE;
 			logger.debug("Jumping through hyperspace to " + startJumpEvent.getStarSystem());
 		} else if (event instanceof FSDJumpEvent) {
-			this.fuelLevel = ((FSDJumpEvent) event).getFuelLevel().floatValue();
+			FSDJumpEvent fsdJumpEvent = (FSDJumpEvent) event;
+			CruiseControlApplication.jumpsSession++;
+			CruiseControlApplication.jumpsTotal++;
+			CruiseControlApplication.lightyearsSession += fsdJumpEvent.getJumpDist().floatValue();
+			CruiseControlApplication.lightyearsTotal += fsdJumpEvent.getJumpDist().floatValue();
+			CruiseControlApplication.explorationPayoutSession += 2000;
+			CruiseControlApplication.explorationPayoutTotal += 2000;
+			this.fuelLevel = fsdJumpEvent.getFuelLevel().floatValue();
 			this.inHyperspaceSince = Long.MAX_VALUE;
 			this.shipControl.honkDelayed(1000);
-			this.currentSystemName = ((FSDJumpEvent) event).getStarSystem();
-			this.currentSystemKnownBodies = this.universeService.findBodiesByStarSystemName(((FSDJumpEvent) event).getStarSystem());
+			this.currentSystemName = fsdJumpEvent.getStarSystem();
+			this.currentSystemKnownBodies = this.universeService.findBodiesByStarSystemName(fsdJumpEvent.getStarSystem());
 			this.gameState = GameState.WAIT_FOR_FSD_COOLDOWN;
-			logger.debug("Arrived at " + ((FSDJumpEvent) event).getStarSystem() + ", honking and waiting for FSD cooldown to start");
+			logger.debug("Arrived at " + fsdJumpEvent.getStarSystem() + ", honking and waiting for FSD cooldown to start");
 		} else if (event instanceof FuelScoopEvent) {
 			this.fuelLevel = ((FuelScoopEvent) event).getTotal().floatValue();
 		} else if (event instanceof DiscoveryScanEvent) {
 			this.currentSystemNumDiscoveredBodies += MiscUtil.getAsInt(((DiscoveryScanEvent) event).getBodies(), 0);
 		} else if (event instanceof ScanEvent) {
+			ScanEvent scanEvent = (ScanEvent) event;
+			CruiseControlApplication.explorationPayoutSession += BodyUtil.estimatePayout(scanEvent);
+			CruiseControlApplication.explorationPayoutTotal += BodyUtil.estimatePayout(scanEvent);
 			this.lastScannedBodyAt = System.currentTimeMillis();
-			this.lastScannedBodyDistanceFromArrival = MiscUtil.getAsFloat(((ScanEvent) event).getDistanceFromArrivalLS(), 0f);
+			this.lastScannedBodyDistanceFromArrival = MiscUtil.getAsFloat(scanEvent.getDistanceFromArrivalLS(), 0f);
 			this.shipControl.selectNextSystemInRoute();
 			if (this.currentSysmapBody != null) {
 				this.shipControl.setThrottle(0);
@@ -1510,9 +1569,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				this.currentSysmapBody.unexplored = false;
 				this.currentSystemScannedBodies.add((ScanEvent) event);
 
-				String scannedBodyType = ((ScanEvent) event).getPlanetClass();
+				String scannedBodyType = scanEvent.getPlanetClass();
 				if (StringUtils.isEmpty(scannedBodyType)) {
-					scannedBodyType = ((ScanEvent) event).getStarType();
+					scannedBodyType = scanEvent.getStarType();
 				}
 
 				// Learn
@@ -1570,7 +1629,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					this.robot.mouseMove(1, 1);
 					this.shipControl.toggleSystemMap();
 					this.gameState = GameState.WAIT_FOR_SYSTEM_MAP;
-					logger.debug(((ScanEvent) event).getBodyName() + " scanned, waiting for system map at stand-still");
+					logger.debug(scanEvent.getBodyName() + " scanned, waiting for system map at stand-still");
 				}
 			}
 		} else if (event instanceof LoadGameEvent) {
