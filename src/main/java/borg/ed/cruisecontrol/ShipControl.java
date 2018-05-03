@@ -15,6 +15,9 @@ public class ShipControl {
 
 	static final Logger logger = LoggerFactory.getLogger(ShipControl.class);
 
+	public static final String SHIP_ORCA = "Orca";
+	public static final String SHIP_TYPE9 = "Type9";
+
 	public static final int UI_NEXT_TAB = KeyEvent.VK_PAGE_UP;
 	public static final int UI_PREV_TAB = KeyEvent.VK_PAGE_DOWN;
 	public static final int DEPLOY_HEATSINK = KeyEvent.VK_H;

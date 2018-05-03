@@ -56,6 +56,7 @@ public class CruiseControlApplication {
 	public static long playtimeMillisSession = 0;
 	public static long playtimeMillisLastDock = 0;
 
+	public static String myShip = "Unknown Ship";
 	public static String myCommanderName = "Unknown Commander Name";
 	public static List<String> myWingMates = new ArrayList<>();
 
@@ -73,12 +74,15 @@ public class CruiseControlApplication {
 	public static final boolean WRITE_SYSMAP_DEBUG_BODY_GRAY = true;
 	public static final boolean WRITE_SYSMAP_DEBUG_BODY_RGB_RESULT = true;
 
-	public static void main(String[] args) throws AWTException {
+	public static void main(String[] args) throws AWTException, IOException {
 		try {
 			UIManager.setLookAndFeel("com.jtattoo.plaf.noire.NoireLookAndFeel");
 		} catch (Exception e) {
 			// Ignore
 		}
+
+		File[] sortedJournalFiles = getSortedJournalFiles();
+		setCommanderData(sortedJournalFiles[sortedJournalFiles.length - 1]);
 
 		GraphicsDevice primaryScreen = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
 		Rectangle screenRect = new Rectangle(primaryScreen.getDisplayMode().getWidth(), primaryScreen.getDisplayMode().getHeight());
@@ -103,7 +107,7 @@ public class CruiseControlApplication {
 		new Thread(new Runnable() {
 			@Override
 			public void run() {
-				computeExplorationPayoutTotal();
+				computeExplorationPayoutTotal(sortedJournalFiles);
 			}
 		}).start();
 
@@ -114,84 +118,92 @@ public class CruiseControlApplication {
 		statusReaderThread.addListener(cruiseControlFrame);
 	}
 
-	private static void computeExplorationPayoutTotal() {
+	private static File[] getSortedJournalFiles() {
+		File journalDir = new File(System.getProperty("user.home"), "Saved Games\\Frontier Developments\\Elite Dangerous");
+		if (!journalDir.exists()) {
+			return null;
+		} else {
+			File[] journalFiles = journalDir.listFiles(new FileFilter() {
+				@Override
+				public boolean accept(File file) {
+					return file.getName().startsWith("Journal.") && file.getName().endsWith(".log");
+				}
+			});
+			Arrays.sort(journalFiles, new Comparator<File>() {
+				@Override
+				public int compare(File f1, File f2) {
+					return new Long(f1.lastModified()).compareTo(new Long(f2.lastModified()));
+				}
+			});
+			logger.debug("Found " + journalFiles.length + " journal files");
+			return journalFiles;
+		}
+	}
+
+	private static void setCommanderData(File file) throws IOException {
+		JournalEventReader jer = new JournalEventReader();
+		List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
+		for (String line : lines) {
+			AbstractJournalEvent event = jer.readLine(line);
+			if (event instanceof LoadGameEvent) {
+				LoadGameEvent loadGameEvent = (LoadGameEvent) event;
+				myCommanderName = loadGameEvent.getCommander();
+				myShip = loadGameEvent.getShip();
+				break;
+			}
+		}
+	}
+
+	private static void computeExplorationPayoutTotal(File[] sortedJournalFiles) {
 		int jumps = 0;
 		float lightyears = 0;
 		long explorationPayout = 0;
 		long lastEventMillis = 0;
 		try {
 			JournalEventReader jer = new JournalEventReader();
-			File journalDir = new File(System.getProperty("user.home"), "Saved Games\\Frontier Developments\\Elite Dangerous");
-			if (journalDir.exists()) {
-				File[] journalFiles = journalDir.listFiles(new FileFilter() {
-					@Override
-					public boolean accept(File file) {
-						return file.getName().startsWith("Journal.") && file.getName().endsWith(".log");
-					}
-				});
-				Arrays.sort(journalFiles, new Comparator<File>() {
-					@Override
-					public int compare(File f1, File f2) {
-						return new Long(f1.lastModified()).compareTo(new Long(f2.lastModified()));
-					}
-				});
-				String myCommanderName = lookupCommanderName(journalFiles[journalFiles.length - 1]);
-				for (File journalFile : journalFiles) {
-					List<String> lines = Files.readAllLines(journalFile.toPath(), StandardCharsets.UTF_8);
-					for (String line : lines) {
-						AbstractJournalEvent event = jer.readLine(line);
-						if (event != null) {
-							long millis = event.getTimestamp().toEpochSecond() * 1000 - lastEventMillis;
-							if (event instanceof LoadGameEvent) {
-								String commander = ((LoadGameEvent) event).getCommander();
-								if (!myCommanderName.equals(commander)) {
-									break;
-								}
-							} else if (event instanceof FSDJumpEvent) {
-								jumpsTotal++;
-								jumps++;
-								lightyearsTotal += ((FSDJumpEvent) event).getJumpDist().floatValue();
-								lightyears += ((FSDJumpEvent) event).getJumpDist().floatValue();
-								explorationPayoutTotal += 2000;
-								explorationPayout += 2000;
-								if (millis <= 600000) {
-									playtimeMillisLastDock += millis;
-								}
-							} else if (event instanceof ScanEvent) {
-								explorationPayoutTotal += BodyUtil.estimatePayout((ScanEvent) event);
-								explorationPayout += BodyUtil.estimatePayout((ScanEvent) event);
-								if (millis <= 600000) {
-									playtimeMillisLastDock += millis;
-								}
-							} else if (event instanceof SellExplorationDataEvent || event instanceof DiedEvent) {
-								jumpsTotal -= jumps;
-								jumps = 0;
-								lightyearsTotal -= lightyears;
-								lightyears = 0;
-								explorationPayoutTotal -= explorationPayout;
-								explorationPayout = 0;
-								playtimeMillisLastDock = 0;
+			for (File journalFile : sortedJournalFiles) {
+				List<String> lines = Files.readAllLines(journalFile.toPath(), StandardCharsets.UTF_8);
+				for (String line : lines) {
+					AbstractJournalEvent event = jer.readLine(line);
+					if (event != null) {
+						long millis = event.getTimestamp().toEpochSecond() * 1000 - lastEventMillis;
+						if (event instanceof LoadGameEvent) {
+							String commander = ((LoadGameEvent) event).getCommander();
+							if (!myCommanderName.equals(commander)) {
+								break;
 							}
-							lastEventMillis = event.getTimestamp().toEpochSecond() * 1000;
+						} else if (event instanceof FSDJumpEvent) {
+							jumpsTotal++;
+							jumps++;
+							lightyearsTotal += ((FSDJumpEvent) event).getJumpDist().floatValue();
+							lightyears += ((FSDJumpEvent) event).getJumpDist().floatValue();
+							explorationPayoutTotal += 2000;
+							explorationPayout += 2000;
+							if (millis <= 600000) {
+								playtimeMillisLastDock += millis;
+							}
+						} else if (event instanceof ScanEvent) {
+							explorationPayoutTotal += BodyUtil.estimatePayout((ScanEvent) event);
+							explorationPayout += BodyUtil.estimatePayout((ScanEvent) event);
+							if (millis <= 600000) {
+								playtimeMillisLastDock += millis;
+							}
+						} else if (event instanceof SellExplorationDataEvent || event instanceof DiedEvent) {
+							jumpsTotal -= jumps;
+							jumps = 0;
+							lightyearsTotal -= lightyears;
+							lightyears = 0;
+							explorationPayoutTotal -= explorationPayout;
+							explorationPayout = 0;
+							playtimeMillisLastDock = 0;
 						}
+						lastEventMillis = event.getTimestamp().toEpochSecond() * 1000;
 					}
 				}
 			}
 		} catch (Exception e) {
 			logger.error("Failed to compute totals", e);
 		}
-	}
-
-	private static String lookupCommanderName(File file) throws IOException {
-		JournalEventReader jer = new JournalEventReader();
-		List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
-		for (String line : lines) {
-			AbstractJournalEvent event = jer.readLine(line);
-			if (event instanceof LoadGameEvent) {
-				return ((LoadGameEvent) event).getCommander();
-			}
-		}
-		return null;
 	}
 
 }
