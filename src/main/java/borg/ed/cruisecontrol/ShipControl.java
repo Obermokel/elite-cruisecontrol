@@ -1,5 +1,7 @@
 package borg.ed.cruisecontrol;
 
+import java.awt.GraphicsDevice;
+import java.awt.GraphicsEnvironment;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Robot;
@@ -10,6 +12,7 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import borg.ed.cruisecontrol.util.MouseUtil;
 
@@ -43,7 +46,10 @@ public class ShipControl {
 	public static final int UI_PREV_TAB = KeyEvent.VK_PAGE_DOWN;
 	public static final int DEPLOY_HEATSINK = KeyEvent.VK_H;
 
-	private final Robot robot;
+	@Autowired
+	private Robot robot = null;
+	private Rectangle screenRect = null;
+	private MouseUtil mouseUtil = null;
 
 	private int pitchUp = 0;
 	private int pitchDown = 0;
@@ -54,20 +60,35 @@ public class ShipControl {
 	private int throttle = 0;
 	private long lastThrottleChange = 0;
 
-	public ShipControl(Robot robot) {
-		this.robot = robot;
+	public ShipControl() {
+		GraphicsDevice primaryScreen = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+		this.screenRect = new Rectangle(primaryScreen.getDisplayMode().getWidth(), primaryScreen.getDisplayMode().getHeight());
+		logger.debug("Primary screen resolution is " + this.screenRect.width + "x" + this.screenRect.height);
+
+		this.mouseUtil = new MouseUtil(screenRect.width, screenRect.height, CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
 	}
 
-	public Robot getRobot() {
-		return robot;
+	/**
+	 * Does not sleep artificially
+	 */
+	public synchronized void mouseMoveOnScreen(int xOnScreen, int yOnScreen) {
+		this.robot.mouseMove(xOnScreen, yOnScreen);
+	}
+
+	/**
+	 * Does not sleep artificially
+	 */
+	public synchronized void mouseMove(int xInImage, int yInImage) {
+		Point pScreen = this.mouseUtil.imageToScreen(new Point(xInImage, yInImage));
+		this.robot.mouseMove(pScreen.x, pScreen.y);
 	}
 
 	/**
 	 * Sleeps between mouse move and click, but not before and after
 	 */
-	public synchronized void leftClick(int xOnScreen, int yOnScreen) throws InterruptedException {
-		this.robot.mouseMove(xOnScreen, yOnScreen);
-		Thread.sleep(400 + (long) (Math.random() * 100));
+	public synchronized void leftClick(int xInImage, int yInImage) throws InterruptedException {
+		this.mouseMove(xInImage, yInImage);
+		Thread.sleep(200 + (long) (Math.random() * 100));
 		this.leftClick();
 	}
 
@@ -76,7 +97,7 @@ public class ShipControl {
 	 */
 	public synchronized void leftClick() throws InterruptedException {
 		this.robot.mousePress(InputEvent.getMaskForButton(1));
-		Thread.sleep(200 + (long) (Math.random() * 50));
+		Thread.sleep(100 + (long) (Math.random() * 50));
 		this.robot.mouseRelease(InputEvent.getMaskForButton(1));
 	}
 
@@ -236,6 +257,7 @@ public class ShipControl {
 	}
 
 	public synchronized void toggleSystemMap() {
+		this.robot.mouseMove(1, 1);
 		this.pressKey(KeyEvent.VK_S);
 	}
 
@@ -306,9 +328,8 @@ public class ShipControl {
 		this.pressKey(KeyEvent.VK_F8);
 	}
 
-	public synchronized void exitToMainMenu(Rectangle screenRect) {
+	public synchronized void exitToMainMenu() {
 		try {
-			MouseUtil mouseUtil = new MouseUtil(screenRect.width, screenRect.height, CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
 			Point pExitToMainMenu = mouseUtil.imageToScreen(new Point(200, 390));
 			Point pYes = mouseUtil.imageToScreen(new Point(900, 660));
 

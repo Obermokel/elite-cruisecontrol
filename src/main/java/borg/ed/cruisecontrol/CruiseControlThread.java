@@ -6,7 +6,6 @@ import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
-import java.awt.Robot;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -34,6 +33,7 @@ import org.apache.commons.lang.time.DurationFormatUtils;
 import org.ddogleg.struct.FastQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import boofcv.abst.feature.associate.AssociateDescription;
 import boofcv.abst.feature.associate.ScoreAssociation;
@@ -80,11 +80,14 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 	private static final String REASON_END_OF_PLOTTED_ROUTE = "End of plotted route";
 
-	private final Robot robot;
-	private final Rectangle screenRect;
-	private final UniverseService universeService;
-	private final ShipControl shipControl;
-	private SysmapScanner sysmapScanner = null;
+	@Autowired
+	private UniverseService universeService;
+	@Autowired
+	private ScreenConverterThread screenConverterThread;
+	@Autowired
+	private ShipControl shipControl;
+	@Autowired
+	private SysmapScanner sysmapScanner;
 
 	private Template refCompass = null;
 	private Template refCompassType9 = null;
@@ -142,14 +145,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 	private List<DebugImageListener> debugImageListeners = new ArrayList<>();
 
-	public CruiseControlThread(Robot robot, Rectangle screenRect, UniverseService universeService) {
+	public CruiseControlThread() {
 		this.setName("CCThread");
 		this.setDaemon(false);
-
-		this.robot = robot;
-		this.screenRect = screenRect;
-		this.universeService = universeService;
-		this.shipControl = new ShipControl(robot);
 	}
 
 	@Override
@@ -158,15 +156,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 		this.loadRefImages();
 
-		final ScreenReaderResult screenReaderResult = new ScreenReaderResult();
-		final ScreenReaderThread screenReaderThread = new ScreenReaderThread(this.robot, this.screenRect, screenReaderResult);
-		screenReaderThread.start();
-
-		final ScreenConverterResult screenConverterResult = new ScreenConverterResult();
-		final ScreenConverterThread screenConverterThread = new ScreenConverterThread(screenReaderResult, screenConverterResult);
-		screenConverterThread.start();
-
-		this.sysmapScanner = new SysmapScanner(robot, screenRect, screenConverterResult);
 		this.sysmapScanner.setWriteDebugImageRgbOriginal(CruiseControlApplication.WRITE_SYSMAP_DEBUG_RGB_ORIGINAL);
 		this.sysmapScanner.setWriteDebugImageGray(CruiseControlApplication.WRITE_SYSMAP_DEBUG_GRAY);
 		this.sysmapScanner.setWriteDebugImageThreshold(CruiseControlApplication.WRITE_SYSMAP_DEBUG_THRESHOLD);
@@ -184,6 +173,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		GrayF32 brightImage = orangeHudImage.createSameShape();
 		BufferedImage debugImage = new BufferedImage(CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT, BufferedImage.TYPE_INT_RGB);
 
+		final ScreenConverterResult screenConverterResult = this.screenConverterThread.getScreenConverterResult();
 		final ExecutorService threadPool = Executors.newFixedThreadPool(4);
 
 		while (!Thread.currentThread().isInterrupted()) {
@@ -468,7 +458,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				if (this.currentSystemNumDiscoveredBodies > 1 && !CruiseControlApplication.JONK_MODE) {
 					this.shipControl.setThrottle(0);
 					logger.debug("Open system map");
-					this.robot.mouseMove(1, 1);
 					this.shipControl.toggleSystemMap();
 					this.gameState = GameState.SCAN_SYSTEM_MAP;
 					logger.debug("Escaped from entry star, " + this.currentSystemNumDiscoveredBodies + " bodies discovered, throttle to 0% and scan system map");
@@ -536,7 +525,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						this.shipControl.setThrottle(0);
 						this.shipControl.stopTurning();
 						logger.debug("Open system map");
-						this.robot.mouseMove(1, 1);
 						this.shipControl.toggleSystemMap();
 						this.gameState = GameState.WAIT_FOR_SYSTEM_MAP;
 						logger.debug("Discarded a star to scan, waiting for system map at 0% throttle");
@@ -595,7 +583,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						this.shipControl.setThrottle(0);
 						this.shipControl.stopTurning();
 						logger.debug("Open system map");
-						this.robot.mouseMove(1, 1);
 						this.shipControl.toggleSystemMap();
 						this.gameState = GameState.WAIT_FOR_SYSTEM_MAP;
 						logger.debug("Discarded a star to scan, waiting for system map at 0% throttle");
@@ -640,7 +627,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			break;
 		case WAIT_FOR_SYSTEM_MAP:
 			if (this.sysmapScanner.isUniversalCartographicsLogoVisible(rgb)) {
-				this.robot.mouseMove(1, 1);
 				Thread.sleep(3000); // Wait for graphics to settle
 				if (!this.clickOnNextBodyOnSystemMap(screenConverterResult)) {
 					this.currentSysmapBody.unexplored = false; // Mark as explored
@@ -756,7 +742,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					}
 
 					// Deploy heatsink, full stop, then exit
-					this.robot.mouseMove(1, 1);
 					if (!REASON_END_OF_PLOTTED_ROUTE.equals(reason)) {
 						this.shipControl.deployHeatsink();
 						try {
@@ -771,7 +756,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					} catch (InterruptedException e) {
 						logger.warn("Interrupted while waiting after stopping ship");
 					}
-					this.shipControl.exitToMainMenu(this.screenRect);
+					this.shipControl.exitToMainMenu();
 
 					// Wait until we are at the main menu
 					try {
@@ -1679,7 +1664,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						this.shipControl.setThrottle(0);
 						this.shipControl.stopTurning();
 						logger.debug("Open system map");
-						this.robot.mouseMove(1, 1);
 						this.shipControl.toggleSystemMap();
 						this.gameState = GameState.WAIT_FOR_SYSTEM_MAP;
 						logger.debug(scanEvent.getBodyName() + " scanned, waiting for system map at stand-still");
@@ -1704,7 +1688,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			this.sysmapScanner.ensureDetailsTabIsVisible();
 
 			// Hover over body, wait until data is displayed and extract
-			this.robot.mouseMove((b.centerOnScreen.x - 5) + random.nextInt(10), (b.centerOnScreen.y - 5) + random.nextInt(10));
+			this.shipControl.mouseMoveOnScreen((b.centerOnScreen.x - 5) + random.nextInt(10), (b.centerOnScreen.y - 5) + random.nextInt(10));
 			Thread.sleep(250 + random.nextInt(250));
 			while ((System.currentTimeMillis() - start) < 1500L) {
 				Planar<GrayF32> rgb = null;
@@ -1724,11 +1708,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				final Point p0 = new Point(0, 0);
 				SysmapBody leftmostBody = this.sysmapScannerResult.getBodies().stream()
 						.sorted((b1, b2) -> new Double(b1.centerOnScreen.distance(p0)).compareTo(new Double(b2.centerOnScreen.distance(p0)))).findFirst().orElse(null);
-				this.robot.mouseMove((leftmostBody.centerOnScreen.x - 5) + random.nextInt(10), (leftmostBody.centerOnScreen.y - 5) + random.nextInt(10));
+				this.shipControl.mouseMoveOnScreen((leftmostBody.centerOnScreen.x - 5) + random.nextInt(10), (leftmostBody.centerOnScreen.y - 5) + random.nextInt(10));
 				Thread.sleep(250 + random.nextInt(250));
 
 				// Try again
-				this.robot.mouseMove((b.centerOnScreen.x - 5) + random.nextInt(10), (b.centerOnScreen.y - 5) + random.nextInt(10));
+				this.shipControl.mouseMoveOnScreen((b.centerOnScreen.x - 5) + random.nextInt(10), (b.centerOnScreen.y - 5) + random.nextInt(10));
 				Thread.sleep(250 + random.nextInt(250));
 				while ((System.currentTimeMillis() - start) < 4500L) {
 					Planar<GrayF32> rgb = null;

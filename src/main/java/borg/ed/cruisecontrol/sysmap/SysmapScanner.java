@@ -2,6 +2,8 @@ package borg.ed.cruisecontrol.sysmap;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.GraphicsDevice;
+import java.awt.GraphicsEnvironment;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Robot;
@@ -27,6 +29,7 @@ import javax.imageio.ImageIO;
 import org.ddogleg.struct.FastQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import boofcv.alg.color.ColorHsv;
 import boofcv.alg.filter.basic.GrayImageOps;
@@ -44,6 +47,7 @@ import boofcv.struct.image.GrayU8;
 import boofcv.struct.image.Planar;
 import borg.ed.cruisecontrol.CruiseControlApplication;
 import borg.ed.cruisecontrol.ScreenConverterResult;
+import borg.ed.cruisecontrol.ScreenConverterThread;
 import borg.ed.cruisecontrol.templatematching.Template;
 import borg.ed.cruisecontrol.templatematching.TemplateMatch;
 import borg.ed.cruisecontrol.templatematching.TemplateMatchRgb;
@@ -58,8 +62,11 @@ public class SysmapScanner {
 
 	static final Logger logger = LoggerFactory.getLogger(SysmapScanner.class);
 
+	@Autowired
 	private Robot robot = null;
 	private Rectangle screenRect = null;
+	@Autowired
+	private ScreenConverterThread screenConverterThread = null;
 	private ScreenConverterResult screenConverterResult = null;
 
 	private TemplateRgb refUcLogo = null;
@@ -88,13 +95,11 @@ public class SysmapScanner {
 	private boolean writeDebugImageBodyGray = false;
 
 	public SysmapScanner() {
-		this(null, null, null);
-	}
+		GraphicsDevice primaryScreen = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+		this.screenRect = new Rectangle(primaryScreen.getDisplayMode().getWidth(), primaryScreen.getDisplayMode().getHeight());
+		logger.debug("Primary screen resolution is " + this.screenRect.width + "x" + this.screenRect.height);
 
-	public SysmapScanner(Robot robot, Rectangle screenRect, ScreenConverterResult screenConverterResult) {
-		this.robot = robot;
-		this.screenRect = screenRect;
-		this.screenConverterResult = screenConverterResult;
+		this.screenConverterResult = this.screenConverterThread.getScreenConverterResult();
 
 		this.reloadTemplates();
 	}

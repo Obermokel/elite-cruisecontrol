@@ -1,13 +1,14 @@
 package borg.ed.cruisecontrol;
 
 import java.awt.AWTException;
-import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
-import java.awt.Rectangle;
 import java.awt.Robot;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileFilter;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -21,10 +22,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
 import borg.ed.cruisecontrol.gui.CruiseControlFrame;
+import borg.ed.cruisecontrol.sysmap.SysmapScanner;
 import borg.ed.universe.UniverseApplication;
 import borg.ed.universe.journal.JournalEventReader;
 import borg.ed.universe.journal.JournalReaderThread;
@@ -35,7 +38,6 @@ import borg.ed.universe.journal.events.FSDJumpEvent;
 import borg.ed.universe.journal.events.LoadGameEvent;
 import borg.ed.universe.journal.events.ScanEvent;
 import borg.ed.universe.journal.events.SellExplorationDataEvent;
-import borg.ed.universe.service.UniverseService;
 import borg.ed.universe.util.BodyUtil;
 
 @Configuration
@@ -58,11 +60,11 @@ public class CruiseControlApplication {
 
 	public static String myShip = "Unknown Ship";
 	public static String myCommanderName = "Unknown Commander Name";
+	public static float MAX_FUEL = 0f; // TODO Rename to camelCase
 	public static List<String> myWingMates = new ArrayList<>();
 
 	public static final int SCALED_WIDTH = 1920;
 	public static final int SCALED_HEIGHT = 1080;
-	public static final float MAX_FUEL = 32f;
 	public static final boolean JONK_MODE = false;
 	public static final boolean CREDITS_MODE = true;
 	public static final boolean SHOW_LIVE_DEBUG_IMAGE = true;
@@ -81,35 +83,38 @@ public class CruiseControlApplication {
 			// Ignore
 		}
 
+		// Know who we are
 		File[] sortedJournalFiles = getSortedJournalFiles();
 		setCommanderData(sortedJournalFiles[sortedJournalFiles.length - 1]);
 
-		GraphicsDevice primaryScreen = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
-		Rectangle screenRect = new Rectangle(primaryScreen.getDisplayMode().getWidth(), primaryScreen.getDisplayMode().getHeight());
-		Robot robot = new Robot(primaryScreen);
-
-		UniverseService universeService = APPCTX.getBean(UniverseService.class);
-
-		JournalReaderThread journalReaderThread = APPCTX.getBean(JournalReaderThread.class);
-		journalReaderThread.start();
-
-		StatusReaderThread statusReaderThread = APPCTX.getBean(StatusReaderThread.class);
-		statusReaderThread.start();
-
-		CruiseControlThread cruiseControlThread = new CruiseControlThread(robot, screenRect, universeService);
-		cruiseControlThread.start();
-
-		CruiseControlFrame cruiseControlFrame = new CruiseControlFrame();
-		cruiseControlFrame.setVisible(true);
-
-		cruiseControlThread.addDebugImageListener(cruiseControlFrame);
-
+		// Compute totals for statistics display (may take a while with hundreds of journal files, so do it in a thread)
 		new Thread(new Runnable() {
 			@Override
 			public void run() {
-				computeExplorationPayoutTotal(sortedJournalFiles);
+				computeTotals(sortedJournalFiles);
 			}
 		}).start();
+
+		// Start all event-generating threads
+		JournalReaderThread journalReaderThread = APPCTX.getBean(JournalReaderThread.class);
+		journalReaderThread.start();
+		StatusReaderThread statusReaderThread = APPCTX.getBean(StatusReaderThread.class);
+		statusReaderThread.start();
+		ScreenReaderThread screenReaderThread = APPCTX.getBean(ScreenReaderThread.class);
+		screenReaderThread.start();
+		ScreenConverterThread screenConverterThread = APPCTX.getBean(ScreenConverterThread.class);
+		screenConverterThread.start();
+
+		// Start the main cruise control thread
+		CruiseControlThread cruiseControlThread = APPCTX.getBean(CruiseControlThread.class);
+		cruiseControlThread.start();
+
+		// Open the GUI
+		CruiseControlFrame cruiseControlFrame = new CruiseControlFrame();
+		cruiseControlFrame.setVisible(true);
+
+		// Add listeners
+		cruiseControlThread.addDebugImageListener(cruiseControlFrame);
 
 		journalReaderThread.addListener(cruiseControlThread);
 		journalReaderThread.addListener(cruiseControlFrame);
@@ -149,45 +154,55 @@ public class CruiseControlApplication {
 				LoadGameEvent loadGameEvent = (LoadGameEvent) event;
 				myCommanderName = loadGameEvent.getCommander();
 				myShip = loadGameEvent.getShip();
+				MAX_FUEL = loadGameEvent.getFuelCapacity().floatValue();
 				break;
 			}
 		}
 	}
 
-	private static void computeExplorationPayoutTotal(File[] sortedJournalFiles) {
+	private static void computeTotals(File[] sortedJournalFiles) {
+		JournalEventReader jer = new JournalEventReader();
+
 		int jumps = 0;
 		float lightyears = 0;
 		long explorationPayout = 0;
 		long lastEventMillis = 0;
+
 		try {
-			JournalEventReader jer = new JournalEventReader();
 			for (File journalFile : sortedJournalFiles) {
+				// Quick check using plain string compare if it is for the current commander
+				boolean isForCurrentCommander = false;
+				try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(journalFile), "UTF-8"))) {
+					String line = null;
+					while ((line = br.readLine()) != null) {
+						if (line.contains("\"event\":\"LoadGame\"")) {
+							isForCurrentCommander = line.contains("\"Commander\":\"" + myCommanderName + "\"");
+							break;
+						}
+					}
+				}
+				if (!isForCurrentCommander) {
+					continue;
+				}
+
+				// If so, then process all lines
 				List<String> lines = Files.readAllLines(journalFile.toPath(), StandardCharsets.UTF_8);
 				for (String line : lines) {
 					AbstractJournalEvent event = jer.readLine(line);
 					if (event != null) {
-						long millis = event.getTimestamp().toEpochSecond() * 1000 - lastEventMillis;
-						if (event instanceof LoadGameEvent) {
-							String commander = ((LoadGameEvent) event).getCommander();
-							if (!myCommanderName.equals(commander)) {
-								break;
-							}
-						} else if (event instanceof FSDJumpEvent) {
+						boolean countEventForPlaytime = false;
+						if (event instanceof FSDJumpEvent) {
 							jumpsTotal++;
 							jumps++;
 							lightyearsTotal += ((FSDJumpEvent) event).getJumpDist().floatValue();
 							lightyears += ((FSDJumpEvent) event).getJumpDist().floatValue();
 							explorationPayoutTotal += 2000;
 							explorationPayout += 2000;
-							if (millis <= 600000) {
-								playtimeMillisLastDock += millis;
-							}
+							countEventForPlaytime = true;
 						} else if (event instanceof ScanEvent) {
 							explorationPayoutTotal += BodyUtil.estimatePayout((ScanEvent) event);
 							explorationPayout += BodyUtil.estimatePayout((ScanEvent) event);
-							if (millis <= 600000) {
-								playtimeMillisLastDock += millis;
-							}
+							countEventForPlaytime = true;
 						} else if (event instanceof SellExplorationDataEvent || event instanceof DiedEvent) {
 							jumpsTotal -= jumps;
 							jumps = 0;
@@ -196,14 +211,56 @@ public class CruiseControlApplication {
 							explorationPayoutTotal -= explorationPayout;
 							explorationPayout = 0;
 							playtimeMillisLastDock = 0;
+							countEventForPlaytime = true;
 						}
-						lastEventMillis = event.getTimestamp().toEpochSecond() * 1000;
+
+						if (countEventForPlaytime) {
+							long millis = event.getTimestamp().toEpochSecond() * 1000 - lastEventMillis;
+							if (millis <= 600000) {
+								playtimeMillisLastDock += millis;
+							}
+							lastEventMillis = event.getTimestamp().toEpochSecond() * 1000;
+						}
 					}
 				}
 			}
 		} catch (Exception e) {
 			logger.error("Failed to compute totals", e);
 		}
+	}
+
+	@Bean
+	public Robot robot() {
+		try {
+			return new Robot(GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice());
+		} catch (AWTException e) {
+			throw new RuntimeException("Failed to obtain a robot", e);
+		}
+	}
+
+	@Bean
+	public ShipControl shipControl() {
+		return new ShipControl();
+	}
+
+	@Bean
+	public SysmapScanner sysmapScanner() {
+		return new SysmapScanner();
+	}
+
+	@Bean
+	public ScreenReaderThread screenReaderThread() {
+		return new ScreenReaderThread();
+	}
+
+	@Bean
+	public ScreenConverterThread screenConverterThread() {
+		return new ScreenConverterThread();
+	}
+
+	@Bean
+	public CruiseControlThread cruiseControlThread() {
+		return new CruiseControlThread();
 	}
 
 }

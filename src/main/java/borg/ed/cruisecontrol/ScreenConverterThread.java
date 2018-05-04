@@ -2,6 +2,7 @@ package borg.ed.cruisecontrol;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import boofcv.alg.color.ColorHsv;
 import boofcv.alg.filter.blur.GBlurImageOps;
@@ -16,20 +17,21 @@ public class ScreenConverterThread extends Thread {
 
 	public volatile boolean shutdown = false;
 
-	private final ScreenReaderResult screenReaderResult;
-	private final ScreenConverterResult screenConverterResult;
+	private final ScreenConverterResult screenConverterResult = new ScreenConverterResult();
 
-	public ScreenConverterThread(ScreenReaderResult screenReaderResult, ScreenConverterResult screenConverterResult) {
+	@Autowired
+	private ScreenReaderThread screenReaderThread = null;
+
+	public ScreenConverterThread() {
 		this.setName("SCThread");
 		this.setDaemon(true);
-
-		this.screenReaderResult = screenReaderResult;
-		this.screenConverterResult = screenConverterResult;
 	}
 
 	@Override
 	public void run() {
 		logger.info(this.getName() + " started");
+
+		final ScreenReaderResult screenReaderResult = this.screenReaderThread.getScreenReaderResult();
 
 		Planar<GrayF32> rgb = new Planar<>(GrayF32.class, CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT, 3);
 		Planar<GrayF32> hsv = rgb.createSameShape();
@@ -44,10 +46,10 @@ public class ScreenConverterThread extends Thread {
 
 		while (!Thread.currentThread().isInterrupted() && !this.shutdown) {
 			// Wait for the next (scaled) screen capture and convert it into BoofCV format
-			synchronized (this.screenReaderResult) {
+			synchronized (screenReaderResult) {
 				try {
-					this.screenReaderResult.wait();
-					ConvertBufferedImage.convertFromMulti(this.screenReaderResult.getScaledScreenCapture(), rgb, true, GrayF32.class);
+					screenReaderResult.wait();
+					ConvertBufferedImage.convertFromMulti(screenReaderResult.getScaledScreenCapture(), rgb, true, GrayF32.class);
 				} catch (InterruptedException e) {
 					break;
 				}
@@ -76,6 +78,10 @@ public class ScreenConverterThread extends Thread {
 		}
 
 		logger.info(this.getName() + " stopped");
+	}
+
+	public ScreenConverterResult getScreenConverterResult() {
+		return screenConverterResult;
 	}
 
 	private void hsvToHudImages(Planar<GrayF32> hsv, GrayF32 orangeHudImage, GrayF32 yellowHudImage, GrayF32 blueWhiteHudImage, GrayF32 redHudImage, GrayF32 brightImage) {
