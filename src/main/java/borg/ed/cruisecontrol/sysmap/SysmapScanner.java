@@ -24,6 +24,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import javax.annotation.PostConstruct;
 import javax.imageio.ImageIO;
 
 import org.ddogleg.struct.FastQueue;
@@ -94,7 +95,8 @@ public class SysmapScanner {
 	private boolean writeDebugImageBodyRgbResult = false;
 	private boolean writeDebugImageBodyGray = false;
 
-	public SysmapScanner() {
+	@PostConstruct
+	public void init() {
 		GraphicsDevice primaryScreen = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
 		this.screenRect = new Rectangle(primaryScreen.getDisplayMode().getWidth(), primaryScreen.getDisplayMode().getHeight());
 		logger.debug("Primary screen resolution is " + this.screenRect.width + "x" + this.screenRect.height);
