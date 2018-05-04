@@ -110,9 +110,10 @@ public class SysmapScanner {
 
 	/**
 	 * Does NOT modify the rgb and hsv images!
+	 * @param creditsMode 
 	 * @throws InterruptedException
 	 */
-	public SysmapScannerResult scanSystemMap(Planar<GrayF32> rgb, Planar<GrayF32> hsv, String systemName) throws InterruptedException {
+	public SysmapScannerResult scanSystemMap(Planar<GrayF32> rgb, Planar<GrayF32> hsv, String systemName, boolean creditsMode) throws InterruptedException {
 		// Search for the UC logo - if found, the system map is open and can be scanned
 		if (!this.isUniversalCartographicsLogoVisible(rgb)) {
 			return null;
@@ -507,7 +508,7 @@ public class SysmapScanner {
 			// If we have control over the computer move the mouse over the found locations to get distance information
 			if (!bodies.isEmpty() && this.robot != null && this.screenRect != null && this.screenConverterResult != null) {
 				try {
-					this.hoverOverBodiesAndExtractData(bodies);
+					this.hoverOverBodiesAndExtractData(bodies, creditsMode);
 				} catch (Exception e) {
 					logger.error("Failed to extract body information", e);
 				}
@@ -577,7 +578,7 @@ public class SysmapScanner {
 		}
 	}
 
-	private void hoverOverBodiesAndExtractData(List<SysmapBody> bodies) throws InterruptedException {
+	private void hoverOverBodiesAndExtractData(List<SysmapBody> bodies, boolean creditsMode) throws InterruptedException {
 		MouseUtil mouseUtil = new MouseUtil(this.screenRect.width, this.screenRect.height, CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
 		Random random = new Random();
 
@@ -601,7 +602,7 @@ public class SysmapScanner {
 		this.ensureDetailsTabIsVisible();
 
 		for (SysmapBody b : bodies) {
-			if (CruiseControlApplication.CREDITS_MODE && b.bestBodyMatch != null) {
+			if (creditsMode && b.bestBodyMatch != null) {
 				try {
 					PlanetClass planetClass = PlanetClass.fromJournalValue(b.bestBodyMatch.getTemplate().getName());
 					if (planetClass == PlanetClass.EARTHLIKE_BODY || planetClass == PlanetClass.WATER_WORLD || planetClass == PlanetClass.AMMONIA_WORLD

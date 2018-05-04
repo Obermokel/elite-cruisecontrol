@@ -65,8 +65,6 @@ public class CruiseControlApplication {
 
 	public static final int SCALED_WIDTH = 1920;
 	public static final int SCALED_HEIGHT = 1080;
-	public static final boolean JONK_MODE = false;
-	public static final boolean CREDITS_MODE = true;
 	public static final boolean SHOW_LIVE_DEBUG_IMAGE = true;
 	public static final boolean WRITE_SYSMAP_DEBUG_RGB_ORIGINAL = true;
 	public static final boolean WRITE_SYSMAP_DEBUG_GRAY = false;

@@ -89,6 +89,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	@Autowired
 	private SysmapScanner sysmapScanner;
 
+	private CruiseSettings cruiseSettings = null;
+
 	private Template refCompass = null;
 	private Template refCompassType9 = null;
 	private Template refCompassDotFilled = null;
@@ -153,6 +155,16 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	@Override
 	public void run() {
 		logger.info(this.getName() + " started");
+
+		try {
+			this.cruiseSettings = CruiseSettings.load();
+			if (this.cruiseSettings == null) {
+				this.cruiseSettings = new CruiseSettings();
+				CruiseSettings.save(this.cruiseSettings);
+			}
+		} catch (IOException e1) {
+			throw new RuntimeException("Failed to load cruise settings", e1);
+		}
 
 		this.loadRefImages();
 
@@ -455,7 +467,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			if (System.currentTimeMillis() - this.escapingFromStarSince > 10000) {
 				this.escapingFromStarSince = Long.MAX_VALUE;
 				this.shipControl.stopTurning();
-				if (this.currentSystemNumDiscoveredBodies > 1 && !CruiseControlApplication.JONK_MODE) {
+				if (this.currentSystemNumDiscoveredBodies > 1 && !this.cruiseSettings.isJonkMode()) {
 					this.shipControl.setThrottle(0);
 					logger.debug("Open system map");
 					this.shipControl.toggleSystemMap();
@@ -465,7 +477,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					this.shipControl.setThrottle(100);
 					this.shipControl.selectNextSystemInRoute();
 					this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
-					if (CruiseControlApplication.JONK_MODE) {
+					if (this.cruiseSettings.isJonkMode()) {
 						logger.debug("Escaped from entry star, jonk mode, aligning to next jump target at 100% throttle");
 					} else {
 						logger.debug("Escaped from entry star, no other bodies discovered, aligning to next jump target at 100% throttle");
@@ -474,7 +486,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			}
 			break;
 		case SCAN_SYSTEM_MAP:
-			this.sysmapScannerResult = this.sysmapScanner.scanSystemMap(rgb, hsv, this.currentSystemName);
+			this.sysmapScannerResult = this.sysmapScanner.scanSystemMap(rgb, hsv, this.currentSystemName, this.cruiseSettings.isCreditsMode());
 			if (this.sysmapScannerResult != null) {
 				if (this.nextBodyToScan() == null) {
 					// Close sysmap, then throttle up and go to next system in route
@@ -1767,7 +1779,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	}
 
 	private SysmapBody nextBodyToScan() {
-		if (CruiseControlApplication.CREDITS_MODE) {
+		if (this.cruiseSettings.isCreditsMode()) {
 			return this.sysmapScannerResult.getBodies().stream().filter( //
 					b -> b.unexplored && // Of course only unexplored
 							((b.distanceLs != null && ((SysmapBody.estimatePayout(b) >= 200000 && b.distanceLs.intValue() < 23456)
