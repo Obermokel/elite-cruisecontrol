@@ -14,7 +14,9 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import javax.swing.UIManager;
 
@@ -60,7 +62,8 @@ public class CruiseControlApplication {
 
 	public static String myShip = "Unknown Ship";
 	public static String myCommanderName = "Unknown Commander Name";
-	public static float MAX_FUEL = 0f; // TODO Rename to camelCase
+	public static Set<String> myVisitedSystems = new HashSet<>();
+	public static float maxFuel = 0f;
 	public static List<String> myWingMates = new ArrayList<>();
 
 	public static final int SCALED_WIDTH = 1920;
@@ -152,7 +155,7 @@ public class CruiseControlApplication {
 				LoadGameEvent loadGameEvent = (LoadGameEvent) event;
 				myCommanderName = loadGameEvent.getCommander();
 				myShip = loadGameEvent.getShip();
-				MAX_FUEL = loadGameEvent.getFuelCapacity().floatValue();
+				maxFuel = loadGameEvent.getFuelCapacity().floatValue();
 				break;
 			}
 		}
@@ -190,6 +193,8 @@ public class CruiseControlApplication {
 					if (event != null) {
 						boolean countEventForPlaytime = false;
 						if (event instanceof FSDJumpEvent) {
+							myVisitedSystems.add(((FSDJumpEvent) event).getStarSystem());
+
 							jumpsTotal++;
 							jumps++;
 							lightyearsTotal += ((FSDJumpEvent) event).getJumpDist().floatValue();

@@ -101,6 +101,16 @@ public class ShipControl {
 		this.robot.mouseRelease(InputEvent.getMaskForButton(1));
 	}
 
+	public synchronized void type(String text) throws InterruptedException {
+		for (int i = 0; i < text.length(); i++) {
+			char c = text.toUpperCase().charAt(i);
+			this.robot.keyPress(c);
+			Thread.sleep(100 + (long) (Math.random() * 50));
+			this.robot.keyRelease(c);
+			Thread.sleep(100 + (long) (Math.random() * 50));
+		}
+	}
+
 	public synchronized void releaseAllKeys() {
 		KeyDownThread.interruptAll();
 	}
@@ -261,6 +271,11 @@ public class ShipControl {
 		this.pressKey(KeyEvent.VK_S);
 	}
 
+	public synchronized void toggleGalaxyMap() {
+		this.robot.mouseMove(1, 1);
+		this.pressKey(KeyEvent.VK_G);
+	}
+
 	public synchronized void honk() {
 		this.pressKey(KeyEvent.VK_SPACE, 7000);
 	}
@@ -281,6 +296,14 @@ public class ShipControl {
 
 	public synchronized void uiLeftPanel() {
 		this.pressKey(KeyEvent.VK_1);
+	}
+
+	public synchronized void uiNextTab() {
+		this.pressKey(KeyEvent.VK_NUMPAD9);
+	}
+
+	public synchronized void uiPrevTab() {
+		this.pressKey(KeyEvent.VK_NUMPAD3);
 	}
 
 	public synchronized void uiUp() {

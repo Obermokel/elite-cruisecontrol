@@ -20,6 +20,8 @@ public enum GameState {
 	 */
 	WAIT_FOR_FSD_COOLDOWN,
 
+	PLOT_TO_NEXT_VALUABLE_SYSTEM,
+
 	/**
 	 * Accelerate to 25% and wait until we are scooping fuel.
 	 */
