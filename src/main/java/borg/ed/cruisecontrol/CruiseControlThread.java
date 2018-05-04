@@ -65,7 +65,6 @@ import borg.ed.universe.journal.events.AbstractJournalEvent;
 import borg.ed.universe.journal.events.DiscoveryScanEvent;
 import borg.ed.universe.journal.events.FSDJumpEvent;
 import borg.ed.universe.journal.events.FuelScoopEvent;
-import borg.ed.universe.journal.events.LoadGameEvent;
 import borg.ed.universe.journal.events.MusicEvent;
 import borg.ed.universe.journal.events.ScanEvent;
 import borg.ed.universe.journal.events.StartJumpEvent;
@@ -891,7 +890,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			xPercent = targetPercentX;
 			yPercent = targetPercentY;
 
-			if (xPercent >= 47.5f && xPercent <= 52.5f && yPercent >= 47.5f && yPercent <= 52.5f) {
+			if (xPercent >= 49.0f && xPercent <= 51.0f && yPercent >= 49.0f && yPercent <= 51.0f) {
 				this.shipControl.stopTurning();
 				return true;
 			}
@@ -905,35 +904,35 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			// 25% to 75%.
 
 			// >>>> Y <<<<
-			if (yPercent < 49.5f) {
+			if (yPercent < 49.0f) {
 				// Target is _above_ center, we need to pitch up
 				if (yPercent < 25) {
 					this.shipControl.setPitchUp(75);
 				} else if (yPercent < 30) {
 					this.shipControl.setPitchUp(50);
 				} else if (yPercent < 35) {
-					this.shipControl.setPitchUp(40);
-				} else if (yPercent < 40) {
 					this.shipControl.setPitchUp(30);
-				} else if (yPercent < 45) {
+				} else if (yPercent < 40) {
 					this.shipControl.setPitchUp(20);
+				} else if (yPercent < 45) {
+					this.shipControl.setPitchUp(10);
 				} else {
-					this.shipControl.setPitchUp(7);
+					this.shipControl.setPitchUp(5);
 				}
-			} else if (yPercent > 50.5f) {
+			} else if (yPercent > 51.0f) {
 				// Target is _below_ center, we need to pitch down
 				if (yPercent > 75) {
 					this.shipControl.setPitchDown(75);
 				} else if (yPercent > 70) {
 					this.shipControl.setPitchDown(50);
 				} else if (yPercent > 65) {
-					this.shipControl.setPitchDown(40);
-				} else if (yPercent > 60) {
 					this.shipControl.setPitchDown(30);
-				} else if (yPercent > 55) {
+				} else if (yPercent > 60) {
 					this.shipControl.setPitchDown(20);
+				} else if (yPercent > 55) {
+					this.shipControl.setPitchDown(10);
 				} else {
-					this.shipControl.setPitchDown(7);
+					this.shipControl.setPitchDown(5);
 				}
 			} else {
 				this.shipControl.setPitchUp(0);
@@ -941,33 +940,33 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			}
 
 			// >>>> X <<<<
-			if (xPercent < 49.5f) {
+			if (xPercent < 49.0f) {
 				if (xPercent < 25) {
 					this.shipControl.setYawLeft(75);
 				} else if (xPercent < 30) {
 					this.shipControl.setYawLeft(50);
 				} else if (xPercent < 35) {
-					this.shipControl.setYawLeft(40);
-				} else if (xPercent < 40) {
 					this.shipControl.setYawLeft(30);
-				} else if (xPercent < 45) {
+				} else if (xPercent < 40) {
 					this.shipControl.setYawLeft(20);
+				} else if (xPercent < 45) {
+					this.shipControl.setYawLeft(10);
 				} else {
-					this.shipControl.setYawLeft(7);
+					this.shipControl.setYawLeft(5);
 				}
-			} else if (xPercent > 50.5f) {
+			} else if (xPercent > 51.0f) {
 				if (xPercent > 75) {
 					this.shipControl.setYawRight(75);
 				} else if (xPercent > 70) {
 					this.shipControl.setYawRight(50);
 				} else if (xPercent > 65) {
-					this.shipControl.setYawRight(40);
-				} else if (xPercent > 60) {
 					this.shipControl.setYawRight(30);
-				} else if (xPercent > 55) {
+				} else if (xPercent > 60) {
 					this.shipControl.setYawRight(20);
+				} else if (xPercent > 55) {
+					this.shipControl.setYawRight(10);
 				} else {
-					this.shipControl.setYawRight(7);
+					this.shipControl.setYawRight(5);
 				}
 			} else {
 				this.shipControl.setYawLeft(0);
@@ -1565,75 +1564,98 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 	@Override
 	public void onNewJournalEntry(AbstractJournalEvent event) {
-		if (event.getTimestamp().toEpochSecond() * 1000 < CruiseControlApplication.APPLICATION_START) {
-			logger.debug(event.getTimestamp() + " = " + event.getTimestamp().toEpochSecond() * 1000 + " < " + CruiseControlApplication.APPLICATION_START);
-			return;
-		} else {
-			CruiseControlApplication.playtimeMillisSession = event.getTimestamp().toEpochSecond() * 1000 - CruiseControlApplication.APPLICATION_START;
-		}
-
-		if (event instanceof MusicEvent) {
-			if (MusicEvent.TRACK_DESTINATION_FROM_HYPERSPACE.equals(((MusicEvent) event).getMusicTrack()) && event.getTimestamp().isAfter(ZonedDateTime.now().minusMinutes(1))) {
-				this.doEmergencyExit(REASON_END_OF_PLOTTED_ROUTE);
+		try {
+			if (event.getTimestamp().toEpochSecond() * 1000 < CruiseControlApplication.APPLICATION_START) {
+				logger.debug(event.getTimestamp() + " = " + event.getTimestamp().toEpochSecond() * 1000 + " < " + CruiseControlApplication.APPLICATION_START);
+				return;
+			} else {
+				CruiseControlApplication.playtimeMillisSession = event.getTimestamp().toEpochSecond() * 1000 - CruiseControlApplication.APPLICATION_START;
 			}
-		} else if (event instanceof StartJumpEvent) {
-			StartJumpEvent startJumpEvent = (StartJumpEvent) event;
-			this.shipControl.stopTurning();
-			this.inHyperspaceSince = System.currentTimeMillis();
-			this.currentSystemName = "";
-			this.currentSystemKnownBodies = new ArrayList<>();
-			this.currentSystemScannedBodies = new ArrayList<>();
-			this.currentSystemNumDiscoveredBodies = 0;
-			this.sysmapScannerResult = null;
-			this.lastScannedBodyAt = 0;
-			this.lastScannedBodyDistanceFromArrival = 0;
-			this.jumpTargetIsScoopable = StringUtils.isEmpty(startJumpEvent.getStarClass()) ? false : StarClass.fromJournalValue(startJumpEvent.getStarClass()).isScoopable();
-			this.gameState = GameState.IN_HYPERSPACE;
-			logger.debug("Jumping through hyperspace to " + startJumpEvent.getStarSystem());
-		} else if (event instanceof FSDJumpEvent) {
-			FSDJumpEvent fsdJumpEvent = (FSDJumpEvent) event;
-			CruiseControlApplication.jumpsSession++;
-			CruiseControlApplication.jumpsTotal++;
-			CruiseControlApplication.lightyearsSession += fsdJumpEvent.getJumpDist().floatValue();
-			CruiseControlApplication.lightyearsTotal += fsdJumpEvent.getJumpDist().floatValue();
-			CruiseControlApplication.explorationPayoutSession += 2000;
-			CruiseControlApplication.explorationPayoutTotal += 2000;
-			this.fuelLevel = fsdJumpEvent.getFuelLevel().floatValue();
-			this.inHyperspaceSince = Long.MAX_VALUE;
-			this.shipControl.honkDelayed(1000);
-			this.currentSystemName = fsdJumpEvent.getStarSystem();
-			this.currentSystemKnownBodies = this.universeService.findBodiesByStarSystemName(fsdJumpEvent.getStarSystem());
-			this.gameState = GameState.WAIT_FOR_FSD_COOLDOWN;
-			logger.debug("Arrived at " + fsdJumpEvent.getStarSystem() + ", honking and waiting for FSD cooldown to start");
-		} else if (event instanceof FuelScoopEvent) {
-			this.fuelLevel = ((FuelScoopEvent) event).getTotal().floatValue();
-		} else if (event instanceof DiscoveryScanEvent) {
-			this.currentSystemNumDiscoveredBodies += MiscUtil.getAsInt(((DiscoveryScanEvent) event).getBodies(), 0);
-		} else if (event instanceof ScanEvent) {
-			ScanEvent scanEvent = (ScanEvent) event;
-			CruiseControlApplication.explorationPayoutSession += BodyUtil.estimatePayout(scanEvent);
-			CruiseControlApplication.explorationPayoutTotal += BodyUtil.estimatePayout(scanEvent);
-			this.lastScannedBodyAt = System.currentTimeMillis();
-			this.lastScannedBodyDistanceFromArrival = MiscUtil.getAsFloat(scanEvent.getDistanceFromArrivalLS(), 0f);
-			this.shipControl.selectNextSystemInRoute();
-			if (this.currentSysmapBody != null) {
-				this.shipControl.setThrottle(0);
-				this.shipControl.stopTurning();
-				this.currentSysmapBody.unexplored = false;
-				this.currentSystemScannedBodies.add((ScanEvent) event);
 
-				String scannedBodyType = scanEvent.getPlanetClass();
-				if (StringUtils.isEmpty(scannedBodyType)) {
-					scannedBodyType = scanEvent.getStarType();
+			if (event instanceof MusicEvent) {
+				if (MusicEvent.TRACK_DESTINATION_FROM_HYPERSPACE.equals(((MusicEvent) event).getMusicTrack()) && event.getTimestamp().isAfter(ZonedDateTime.now().minusMinutes(1))) {
+					this.doEmergencyExit(REASON_END_OF_PLOTTED_ROUTE);
 				}
+			} else if (event instanceof StartJumpEvent) {
+				StartJumpEvent startJumpEvent = (StartJumpEvent) event;
+				this.shipControl.stopTurning();
+				this.inHyperspaceSince = System.currentTimeMillis();
+				this.currentSystemName = "";
+				this.currentSystemKnownBodies = new ArrayList<>();
+				this.currentSystemScannedBodies = new ArrayList<>();
+				this.currentSystemNumDiscoveredBodies = 0;
+				this.sysmapScannerResult = null;
+				this.lastScannedBodyAt = 0;
+				this.lastScannedBodyDistanceFromArrival = 0;
+				this.jumpTargetIsScoopable = StringUtils.isEmpty(startJumpEvent.getStarClass()) ? false : StarClass.fromJournalValue(startJumpEvent.getStarClass()).isScoopable();
+				this.gameState = GameState.IN_HYPERSPACE;
+				logger.debug("Jumping through hyperspace to " + startJumpEvent.getStarSystem());
+			} else if (event instanceof FSDJumpEvent) {
+				FSDJumpEvent fsdJumpEvent = (FSDJumpEvent) event;
+				CruiseControlApplication.jumpsSession++;
+				CruiseControlApplication.jumpsTotal++;
+				CruiseControlApplication.lightyearsSession += fsdJumpEvent.getJumpDist().floatValue();
+				CruiseControlApplication.lightyearsTotal += fsdJumpEvent.getJumpDist().floatValue();
+				CruiseControlApplication.explorationPayoutSession += 2000;
+				CruiseControlApplication.explorationPayoutTotal += 2000;
+				this.fuelLevel = fsdJumpEvent.getFuelLevel().floatValue();
+				this.inHyperspaceSince = Long.MAX_VALUE;
+				this.shipControl.honkDelayed(1000);
+				this.currentSystemName = fsdJumpEvent.getStarSystem();
+				this.currentSystemKnownBodies = this.universeService.findBodiesByStarSystemName(fsdJumpEvent.getStarSystem());
+				this.gameState = GameState.WAIT_FOR_FSD_COOLDOWN;
+				logger.debug("Arrived at " + fsdJumpEvent.getStarSystem() + ", honking and waiting for FSD cooldown to start");
+			} else if (event instanceof FuelScoopEvent) {
+				this.fuelLevel = ((FuelScoopEvent) event).getTotal().floatValue();
+			} else if (event instanceof DiscoveryScanEvent) {
+				this.currentSystemNumDiscoveredBodies += MiscUtil.getAsInt(((DiscoveryScanEvent) event).getBodies(), 0);
+			} else if (event instanceof ScanEvent) {
+				ScanEvent scanEvent = (ScanEvent) event;
+				CruiseControlApplication.explorationPayoutSession += BodyUtil.estimatePayout(scanEvent);
+				CruiseControlApplication.explorationPayoutTotal += BodyUtil.estimatePayout(scanEvent);
+				this.lastScannedBodyAt = System.currentTimeMillis();
+				this.lastScannedBodyDistanceFromArrival = MiscUtil.getAsFloat(scanEvent.getDistanceFromArrivalLS(), 0f);
+				this.shipControl.selectNextSystemInRoute();
+				if (this.currentSysmapBody != null) {
+					this.shipControl.setThrottle(0);
+					this.shipControl.stopTurning();
+					this.currentSysmapBody.unexplored = false;
+					this.currentSystemScannedBodies.add((ScanEvent) event);
 
-				// Learn
-				if (this.currentSysmapBody.bestBodyMatch != null) {
-					String guessedBodyType = this.currentSysmapBody.bestBodyMatch.getTemplate().getName();
-					if (StringUtils.isNotEmpty(scannedBodyType) && !scannedBodyType.equals(guessedBodyType)) {
-						logger.warn("Wrongly guessed " + guessedBodyType + ", but was " + scannedBodyType);
+					String scannedBodyType = scanEvent.getPlanetClass();
+					if (StringUtils.isEmpty(scannedBodyType)) {
+						scannedBodyType = scanEvent.getStarType();
+					}
+
+					// Learn
+					if (this.currentSysmapBody.bestBodyMatch != null) {
+						String guessedBodyType = this.currentSysmapBody.bestBodyMatch.getTemplate().getName();
+						if (StringUtils.isNotEmpty(scannedBodyType) && !scannedBodyType.equals(guessedBodyType)) {
+							logger.warn("Wrongly guessed " + guessedBodyType + ", but was " + scannedBodyType);
+							try {
+								BufferedImage planetImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(this.currentSysmapBody.bestBodyMatch.getImage()), null, true);
+								File refFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/sysmapBodies/" + scannedBodyType);
+								if (!refFolder.exists()) {
+									refFolder.mkdirs();
+								}
+								final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
+								ImageIO.write(planetImage, "PNG", new File(refFolder, scannedBodyType + " " + ts + " " + this.currentSystemName + ".png"));
+								this.sysmapScanner.reloadTemplates();
+								this.sysmapScanner.guessBodyTypes(this.sysmapScannerResult);
+							} catch (IOException e) {
+								logger.warn("Failed to write planet ref image", e);
+							}
+						} else {
+							logger.info("Correctly guessed " + guessedBodyType + ", and was " + scannedBodyType);
+						}
+					} else {
+						logger.warn("Had no idea that it was " + scannedBodyType);
 						try {
-							BufferedImage planetImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(this.currentSysmapBody.bestBodyMatch.getImage()), null, true);
+							int x0 = this.currentSysmapBody.areaInImage.x;
+							int y0 = this.currentSysmapBody.areaInImage.y;
+							int x1 = this.currentSysmapBody.areaInImage.x + this.currentSysmapBody.areaInImage.width;
+							int y1 = this.currentSysmapBody.areaInImage.y + this.currentSysmapBody.areaInImage.height;
+							BufferedImage planetImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(this.sysmapScannerResult.getRgb().subimage(x0, y0, x1, y1)), null, true);
 							File refFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/sysmapBodies/" + scannedBodyType);
 							if (!refFolder.exists()) {
 								refFolder.mkdirs();
@@ -1645,48 +1667,27 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						} catch (IOException e) {
 							logger.warn("Failed to write planet ref image", e);
 						}
-					} else {
-						logger.info("Correctly guessed " + guessedBodyType + ", and was " + scannedBodyType);
 					}
-				} else {
-					logger.warn("Had no idea that it was " + scannedBodyType);
-					try {
-						int x0 = this.currentSysmapBody.areaInImage.x;
-						int y0 = this.currentSysmapBody.areaInImage.y;
-						int x1 = this.currentSysmapBody.areaInImage.x + this.currentSysmapBody.areaInImage.width;
-						int y1 = this.currentSysmapBody.areaInImage.y + this.currentSysmapBody.areaInImage.height;
-						BufferedImage planetImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(this.sysmapScannerResult.getRgb().subimage(x0, y0, x1, y1)), null, true);
-						File refFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/sysmapBodies/" + scannedBodyType);
-						if (!refFolder.exists()) {
-							refFolder.mkdirs();
-						}
-						final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
-						ImageIO.write(planetImage, "PNG", new File(refFolder, scannedBodyType + " " + ts + " " + this.currentSystemName + ".png"));
-						this.sysmapScanner.reloadTemplates();
-						this.sysmapScanner.guessBodyTypes(this.sysmapScannerResult);
-					} catch (IOException e) {
-						logger.warn("Failed to write planet ref image", e);
-					}
-				}
 
-				this.currentSysmapBody = null;
-				if (this.nextBodyToScan() == null) {
-					this.shipControl.setThrottle(0);
-					this.shipControl.selectNextSystemInRoute();
-					this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
-					logger.debug("All bodies scanned, aligning to next jump target at 0% throttle");
-				} else {
-					this.shipControl.setThrottle(0);
-					this.shipControl.stopTurning();
-					logger.debug("Open system map");
-					this.robot.mouseMove(1, 1);
-					this.shipControl.toggleSystemMap();
-					this.gameState = GameState.WAIT_FOR_SYSTEM_MAP;
-					logger.debug(scanEvent.getBodyName() + " scanned, waiting for system map at stand-still");
+					this.currentSysmapBody = null;
+					if (this.nextBodyToScan() == null) {
+						this.shipControl.setThrottle(0);
+						this.shipControl.selectNextSystemInRoute();
+						this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+						logger.debug("All bodies scanned, aligning to next jump target at 0% throttle");
+					} else {
+						this.shipControl.setThrottle(0);
+						this.shipControl.stopTurning();
+						logger.debug("Open system map");
+						this.robot.mouseMove(1, 1);
+						this.shipControl.toggleSystemMap();
+						this.gameState = GameState.WAIT_FOR_SYSTEM_MAP;
+						logger.debug(scanEvent.getBodyName() + " scanned, waiting for system map at stand-still");
+					}
 				}
 			}
-		} else if (event instanceof LoadGameEvent) {
-			CruiseControlApplication.myCommanderName = ((LoadGameEvent) event).getCommander();
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 		}
 	}
 
