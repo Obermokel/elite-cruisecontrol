@@ -287,7 +287,7 @@ public class ShipControl {
 	}
 
 	public synchronized void honk() {
-		this.pressKey(KeyEvent.VK_SPACE, 7000);
+		this.pressKey(KeyEvent.VK_SPACE, 8000);
 	}
 
 	public synchronized void honkDelayed(final long millis) {
@@ -384,7 +384,7 @@ public class ShipControl {
 	}
 
 	private void pressKey(int keyCode) {
-		this.pressKey(keyCode, 250);
+		this.pressKey(keyCode, 45);
 	}
 
 	private void pressKey(int keyCode, long millis) {

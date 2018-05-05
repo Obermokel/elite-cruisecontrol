@@ -813,7 +813,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		this.shipControl.uiRight();
 		Thread.sleep(250 + (long) (Math.random() * 100));
 		this.shipControl.uiSelect();
-		Thread.sleep(10000 + (long) (Math.random() * 2000)); // Wait for route plotter
+		Thread.sleep(15000 + (long) (Math.random() * 3000)); // Wait for route plotter
 
 		this.shipControl.toggleGalaxyMap();
 		Thread.sleep(1000 + (long) (Math.random() * 200));
@@ -1725,8 +1725,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				CruiseControlApplication.explorationPayoutTotal += 2000;
 				this.fuelLevel = fsdJumpEvent.getFuelLevel().floatValue();
 				this.inHyperspaceSince = Long.MAX_VALUE;
-				this.shipControl.honkDelayed(1000);
-				this.honkingSince = System.currentTimeMillis() + 1000;
+				this.shipControl.honkDelayed(2000);
+				this.honkingSince = System.currentTimeMillis() + 2000;
 				this.currentSystemName = fsdJumpEvent.getStarSystem();
 				this.currentSystemKnownBodies = this.universeService.findBodiesByStarSystemName(fsdJumpEvent.getStarSystem());
 				if (this.nextValuableSystem != null && fsdJumpEvent.getStarSystem().equals(this.nextValuableSystem.getName())) {
