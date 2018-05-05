@@ -235,8 +235,8 @@ public class ShipControl {
 
 	public synchronized void setThrottle(int throttle) throws InterruptedException {
 		long millisSinceLastChange = System.currentTimeMillis() - this.lastThrottleChange;
-		if (millisSinceLastChange < 35) {
-			Thread.sleep(35 - millisSinceLastChange);
+		if (millisSinceLastChange < 50) {
+			Thread.sleep(50 - millisSinceLastChange);
 		}
 		this.lastThrottleChange = System.currentTimeMillis();
 
