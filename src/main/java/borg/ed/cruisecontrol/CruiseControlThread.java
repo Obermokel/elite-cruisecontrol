@@ -127,6 +127,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private long getInScoopingRangeSince = Long.MAX_VALUE;
 	private boolean jumpTargetIsScoopable = false;
 	private long escapeFromNonScoopableSince = Long.MAX_VALUE;
+	private long approachNextBodySince = Long.MAX_VALUE;
 	private String currentSystemName = "";
 	private List<Body> currentSystemKnownBodies = new ArrayList<>();
 	private List<ScanEvent> currentSystemScannedBodies = new ArrayList<>();
@@ -625,6 +626,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					}
 					if (this.alignToTargetInHud()) {
 						this.shipControl.setThrottle(75);
+						this.approachNextBodySince = System.currentTimeMillis();
 						this.gameState = GameState.APPROACH_NEXT_BODY;
 						logger.debug("Next body in sight, accelerating to 75% and waiting for detailed surface scan");
 					}
@@ -634,6 +636,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					}
 					if (this.alignToTargetInCompass(compassMatch, compassDotMatch)) {
 						this.shipControl.setThrottle(75);
+						this.approachNextBodySince = System.currentTimeMillis();
 						this.gameState = GameState.APPROACH_NEXT_BODY;
 						logger.debug("Next body in sight, accelerating to 75% and waiting for detailed surface scan");
 					}
@@ -648,6 +651,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			}
 			break;
 		case APPROACH_NEXT_BODY:
+			if (System.currentTimeMillis() - this.approachNextBodySince > 600_000) {
+				logger.warn("Approaching next body took too long, aligning to next system now");
+				this.shipControl.selectNextSystemInRoute();
+				this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+				return;
+			}
 			if (this.brightnessAhead > 0.15f) {
 				// If it is a star then we are too close. Discard this star.
 				if (this.currentSysmapBody.solarMasses != null) {
