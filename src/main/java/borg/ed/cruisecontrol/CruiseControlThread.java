@@ -134,6 +134,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private SysmapScannerResult sysmapScannerResult = null;
 	private long lastScannedBodyAt = 0;
 	private float lastScannedBodyDistanceFromArrival = 0;
+	private int lastValuableSystemsRadiusLy = 500;
 	private List<ValuableSystem> valuableSystems = new ArrayList<>();
 	private ValuableSystem nextValuableSystem = null;
 	private long lastTick = System.currentTimeMillis();
@@ -757,6 +758,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		this.shipControl.toggleGalaxyMap();
 		Thread.sleep(1000 + (long) (Math.random() * 200));
 
+		this.getInScoopingRangeSince = System.currentTimeMillis();
 		this.gameState = GameState.GET_IN_SCOOPING_RANGE;
 	}
 
@@ -1495,7 +1497,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		if (this.nextValuableSystem != null) {
 			nextValuable = this.nextValuableSystem.getName() + " (" + String.format(Locale.US, "%,d CR", this.nextValuableSystem.getPayout()) + ")";
 		}
-		g.drawString(String.format(Locale.US, "valuable=%d | next=%s", this.valuableSystems.size(), nextValuable), 10, 420);
+		g.drawString(String.format(Locale.US, "valuable=%d in %d Ly | next=%s", this.valuableSystems.size(), this.lastValuableSystemsRadiusLy, nextValuable), 10, 420);
 
 		// Payouts
 		g.setFont(new Font("Monospaced", Font.BOLD, 20));
@@ -1663,20 +1665,25 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				if (this.nextValuableSystem != null && fsdJumpEvent.getStarSystem().equals(this.nextValuableSystem.getName())) {
 					this.nextValuableSystem = null;
 				}
-				this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), 500, this.cruiseSettings.getWaypoints().get(0));
+				this.lastValuableSystemsRadiusLy = 500;
+				this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), this.lastValuableSystemsRadiusLy, this.cruiseSettings.getWaypoints().get(0));
 				if (this.valuableSystems.isEmpty()) {
-					this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), 1000, this.cruiseSettings.getWaypoints().get(0));
+					this.lastValuableSystemsRadiusLy = 1000;
+					this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), this.lastValuableSystemsRadiusLy, this.cruiseSettings.getWaypoints().get(0));
 				}
 				if (this.valuableSystems.isEmpty()) {
-					this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), 2000, this.cruiseSettings.getWaypoints().get(0));
+					this.lastValuableSystemsRadiusLy = 2000;
+					this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), this.lastValuableSystemsRadiusLy, this.cruiseSettings.getWaypoints().get(0));
 				}
 				if (!this.valuableSystems.isEmpty()) {
 					ValuableSystem bestValuableSystem = this.valuableSystems.get(0);
 					if (this.nextValuableSystem == null || bestValuableSystem.getPayout() > this.nextValuableSystem.getPayout()) {
-						this.nextValuableSystem = bestValuableSystem;
-						this.gameState = GameState.PLOT_TO_NEXT_VALUABLE_SYSTEM;
-						logger.debug("Arrived at " + fsdJumpEvent.getStarSystem() + ", honking and plotting to a new valuable system");
-						return;
+						if (this.nextValuableSystem == null || !bestValuableSystem.getName().equals(this.nextValuableSystem.getName())) { // A rare case, but another explorer could just have increased the value of the system we already head to
+							this.nextValuableSystem = bestValuableSystem;
+							this.gameState = GameState.PLOT_TO_NEXT_VALUABLE_SYSTEM;
+							logger.debug("Arrived at " + fsdJumpEvent.getStarSystem() + ", honking and plotting to a new valuable system");
+							return;
+						}
 					}
 				}
 				this.gameState = GameState.WAIT_FOR_FSD_COOLDOWN;
@@ -1687,6 +1694,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				this.currentSystemNumDiscoveredBodies += MiscUtil.getAsInt(((DiscoveryScanEvent) event).getBodies(), 0);
 			} else if (event instanceof ScanEvent) {
 				ScanEvent scanEvent = (ScanEvent) event;
+				this.shipControl.stopTurning();
 				CruiseControlApplication.explorationPayoutSession += BodyUtil.estimatePayout(scanEvent);
 				CruiseControlApplication.explorationPayoutTotal += BodyUtil.estimatePayout(scanEvent);
 				this.lastScannedBodyAt = System.currentTimeMillis();
@@ -1787,6 +1795,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				}
 				Coord candidateSystemCoord = candidateSystems.get(candidateSystemName);
 				float distanceToCandidate = myCoord.distanceTo(candidateSystemCoord);
+				if (distanceToCandidate > rangeLy) {
+					continue; // The ES query uses a box, not direct distance
+				}
 				float candidateDistanceToNextWaypoint = candidateSystemCoord.distanceTo(nextWaypointCoord);
 				float maxAllowedDistance = nextWaypointDistance - (distanceToCandidate / 2); // At least half of the way must be towards our next waypoint
 				if (candidateDistanceToNextWaypoint <= maxAllowedDistance) {
@@ -1799,7 +1810,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					for (Body b : valuableBodies) {
 						payout += BodyUtil.estimatePayout(b);
 					}
-					if (payout >= 1_000_000) {
+					if (payout >= 500_000) {
 						valuableSystems.add(new ValuableSystem(candidateSystemName, candidateSystemCoord, payout));
 					}
 				}
