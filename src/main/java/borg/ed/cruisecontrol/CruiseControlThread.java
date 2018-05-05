@@ -126,6 +126,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private long fsdChargingSince = Long.MAX_VALUE;
 	private long getInScoopingRangeSince = Long.MAX_VALUE;
 	private boolean jumpTargetIsScoopable = false;
+	private long escapeFromNonScoopableSince = Long.MAX_VALUE;
 	private String currentSystemName = "";
 	private List<Body> currentSystemKnownBodies = new ArrayList<>();
 	private List<ScanEvent> currentSystemScannedBodies = new ArrayList<>();
@@ -500,6 +501,56 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				}
 			}
 			break;
+		case ESCAPE_FROM_NON_SCOOPABLE:
+			long escapingSince = System.currentTimeMillis() - this.escapeFromNonScoopableSince;
+			long pitch180TimeMillis = this.shipControl.getPitch180TimeMillis();
+			if (escapingSince < pitch180TimeMillis) {
+				if (this.shipControl.getThrottle() != 0) {
+					this.shipControl.setThrottle(0);
+				}
+				if (this.shipControl.getPitchDown() != 100) {
+					this.shipControl.setPitchDown(100);
+				}
+			} else {
+				if (escapingSince < pitch180TimeMillis + 15000) { // Flee for 15 seocnds
+					if (this.brightnessAhead > 0.15f) {
+						if (this.shipControl.getThrottle() != 75) {
+							this.shipControl.setThrottle(75);
+						}
+						this.shipControl.setPitchDown(100);
+						if (this.brightnessAheadLeft > this.brightnessAheadRight) {
+							this.shipControl.setRollLeft((int) (10 * Math.random()));
+						} else {
+							this.shipControl.setRollRight((int) (10 * Math.random()));
+						}
+					} else {
+						this.shipControl.stopTurning();
+						if (this.shipControl.getThrottle() != 100) {
+							this.shipControl.setThrottle(100);
+						}
+					}
+				} else {
+					this.escapeFromNonScoopableSince = Long.MAX_VALUE;
+					this.shipControl.stopTurning();
+					if (this.currentSystemNumDiscoveredBodies > 1 && !this.cruiseSettings.isJonkMode()) {
+						this.shipControl.setThrottle(0);
+						logger.debug("Open system map");
+						this.shipControl.toggleSystemMap();
+						this.gameState = GameState.SCAN_SYSTEM_MAP;
+						logger.debug("Escaped from non-scoopable star, " + this.currentSystemNumDiscoveredBodies + " bodies discovered, throttle to 0% and scan system map");
+					} else {
+						this.shipControl.setThrottle(100);
+						this.shipControl.selectNextSystemInRoute();
+						this.gameState = GameState.ALIGN_TO_NEXT_SYSTEM;
+						if (this.cruiseSettings.isJonkMode()) {
+							logger.debug("Escaped from non-scoopable star, jonk mode, aligning to next jump target at 100% throttle");
+						} else {
+							logger.debug("Escaped from non-scoopable star, no other bodies discovered, aligning to next jump target at 100% throttle");
+						}
+					}
+				}
+			}
+			break;
 		case SCAN_SYSTEM_MAP:
 			this.sysmapScannerResult = this.sysmapScanner.scanSystemMap(rgb, hsv, this.currentSystemName, this.cruiseSettings.isCreditsMode());
 			if (this.sysmapScannerResult != null) {
@@ -758,8 +809,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		this.shipControl.toggleGalaxyMap();
 		Thread.sleep(1000 + (long) (Math.random() * 200));
 
-		this.getInScoopingRangeSince = System.currentTimeMillis();
-		this.gameState = GameState.GET_IN_SCOOPING_RANGE;
+		if (!this.jumpTargetIsScoopable) {
+			this.escapeFromNonScoopableSince = System.currentTimeMillis();
+			this.gameState = GameState.ESCAPE_FROM_NON_SCOOPABLE;
+		} else {
+			this.getInScoopingRangeSince = System.currentTimeMillis();
+			this.gameState = GameState.GET_IN_SCOOPING_RANGE;
+		}
 	}
 
 	private boolean isShipHudVisible(GrayF32 orangeHudImage) {
@@ -1594,7 +1650,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 			if (status.isFsdCooldown() && !this.fsdCooldown && this.gameState == GameState.WAIT_FOR_FSD_COOLDOWN) {
 				if (!this.jumpTargetIsScoopable) {
-					this.gameState = GameState.ALIGN_TO_STAR_ESCAPE;
+					this.gameState = GameState.ESCAPE_FROM_NON_SCOOPABLE;
+					this.escapeFromNonScoopableSince = System.currentTimeMillis();
 					logger.debug("Jumped in at a non-scoopable star, directly aligning to star escape vector");
 				} else {
 					this.gameState = GameState.GET_IN_SCOOPING_RANGE;

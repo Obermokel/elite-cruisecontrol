@@ -24,11 +24,17 @@ public class ShipControl {
 	public static final String SHIP_ORCA = "Orca";
 	public static final String SHIP_TYPE9 = "Type9";
 
+	public static final Map<String, Long> PITCH_180_MILLIS = new HashMap<>();
+
 	public static final Map<String, Float> PITCH_FACTOR = new HashMap<>();
 	public static final Map<String, Float> ROLL_FACTOR = new HashMap<>();
 	public static final Map<String, Float> YAW_FACTOR = new HashMap<>();
 
 	static {
+		PITCH_180_MILLIS.put(SHIP_ANACONDA, 24000L);
+		PITCH_180_MILLIS.put(SHIP_ORCA, 18000L);
+		PITCH_180_MILLIS.put(SHIP_TYPE9, 30000L);
+
 		PITCH_FACTOR.put(SHIP_ORCA, 2.5f);
 		ROLL_FACTOR.put(SHIP_ORCA, 1.5f);
 		YAW_FACTOR.put(SHIP_ORCA, 4.5f);
@@ -66,6 +72,10 @@ public class ShipControl {
 		logger.debug("Primary screen resolution is " + this.screenRect.width + "x" + this.screenRect.height);
 
 		this.mouseUtil = new MouseUtil(screenRect.width, screenRect.height, CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
+	}
+
+	public long getPitch180TimeMillis() {
+		return PITCH_180_MILLIS.getOrDefault(CruiseControlApplication.myShip, 20000L);
 	}
 
 	/**
