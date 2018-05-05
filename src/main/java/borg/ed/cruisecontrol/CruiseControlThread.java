@@ -126,6 +126,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private long fsdChargingSince = Long.MAX_VALUE;
 	private long getInScoopingRangeSince = Long.MAX_VALUE;
 	private boolean jumpTargetIsScoopable = false;
+	private StarClass nextStarClass = null;
 	private long escapeFromNonScoopableSince = Long.MAX_VALUE;
 	private long approachNextBodySince = Long.MAX_VALUE;
 	private String currentSystemName = "";
@@ -553,7 +554,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			}
 			break;
 		case SCAN_SYSTEM_MAP:
-			this.sysmapScannerResult = this.sysmapScanner.scanSystemMap(rgb, hsv, this.currentSystemName, this.cruiseSettings.isCreditsMode());
+			this.sysmapScannerResult = this.sysmapScanner.scanSystemMap(rgb, hsv, this.currentSystemName, this.cruiseSettings.isCreditsMode(), this.nextStarClass);
 			if (this.sysmapScannerResult != null) {
 				if (this.nextBodyToScan() == null) {
 					// Close sysmap, then throttle up and go to next system in route
@@ -1529,10 +1530,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		StringBuilder sbGuessed = new StringBuilder("guessed=").append(this.sysmapScannerResult == null ? 0 : this.sysmapScannerResult.getBodies().size());
 		if (this.sysmapScannerResult != null && !this.sysmapScannerResult.getBodies().isEmpty()) {
 			List<SysmapBody> bodiesSortedByValue = this.sysmapScannerResult.getBodies().stream()
-					.sorted((b1, b2) -> -1 * new Long(SysmapBody.estimatePayout(b1)).compareTo(new Long(SysmapBody.estimatePayout(b2)))).collect(Collectors.toList());
+					.sorted((b1, b2) -> -1 * new Long(SysmapBody.estimatePayout(b1, this.nextStarClass)).compareTo(new Long(SysmapBody.estimatePayout(b2, this.nextStarClass))))
+					.collect(Collectors.toList());
 			LinkedHashMap<String, Integer> countByType = new LinkedHashMap<>();
 			for (SysmapBody b : bodiesSortedByValue) {
-				String abbrType = SysmapBody.getAbbreviatedType(b);
+				String abbrType = SysmapBody.getAbbreviatedType(b, this.nextStarClass);
 				countByType.put(abbrType, countByType.getOrDefault(abbrType, 0) + 1);
 			}
 			for (String abbrType : countByType.keySet()) {
@@ -1703,6 +1705,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				this.lastScannedBodyAt = 0;
 				this.lastScannedBodyDistanceFromArrival = 0;
 				this.jumpTargetIsScoopable = StringUtils.isEmpty(startJumpEvent.getStarClass()) ? false : StarClass.fromJournalValue(startJumpEvent.getStarClass()).isScoopable();
+				this.nextStarClass = StringUtils.isEmpty(startJumpEvent.getStarClass()) ? null : StarClass.fromJournalValue(startJumpEvent.getStarClass());
 				this.gameState = GameState.IN_HYPERSPACE;
 				logger.debug("Jumping through hyperspace to " + startJumpEvent.getStarSystem());
 			} else if (event instanceof FSDJumpEvent) {
@@ -2005,8 +2008,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		if (this.cruiseSettings.isCreditsMode()) {
 			return this.sysmapScannerResult.getBodies().stream().filter( //
 					b -> b.unexplored && // Of course only unexplored
-							((b.distanceLs != null && ((SysmapBody.estimatePayout(b) >= 200000 && b.distanceLs.intValue() < 23456)
-									|| (SysmapBody.estimatePayout(b) >= 500000 && b.distanceLs.intValue() < 56789)))))
+							((b.distanceLs != null && ((SysmapBody.estimatePayout(b, this.nextStarClass) >= 200000 && b.distanceLs.intValue() < 23456)
+									|| (SysmapBody.estimatePayout(b, this.nextStarClass) >= 500000 && b.distanceLs.intValue() < 56789)))))
 					.sorted(new SensibleScanOrderComparator()).findFirst().orElse(null);
 		} else {
 			final boolean alreadyScannedStar = false; //this.currentSystemScannedBodies.stream().filter(e -> StringUtils.isNotEmpty(e.getStarType())).findFirst().isPresent();
@@ -2017,8 +2020,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 							b.moonMasses == null && // No belts please
 							(!allowStars ? b.solarMasses == null : true) && // No further stars if already scanned one
 							(b.earthMasses == null || b.earthMasses.floatValue() > 0.0099f) && // Not every mini-moon (0.99% and less earth masses) pls
-							((b.distanceLs != null && (b.distanceLs.intValue() <= 12345 || (SysmapBody.estimatePayout(b) >= 200000 && b.distanceLs.intValue() < 23456)
-									|| (SysmapBody.estimatePayout(b) >= 500000 && b.distanceLs.intValue() < 56789))) || (b.solarMasses != null))) // Only close distance (or stars)
+							((b.distanceLs != null && (b.distanceLs.intValue() <= 12345 || (SysmapBody.estimatePayout(b, this.nextStarClass) >= 200000 && b.distanceLs.intValue() < 23456)
+									|| (SysmapBody.estimatePayout(b, this.nextStarClass) >= 500000 && b.distanceLs.intValue() < 56789))) || (b.solarMasses != null))) // Only close distance (or stars)
 					.sorted(new SensibleScanOrderComparator()).findFirst().orElse(null);
 		}
 	}

@@ -40,12 +40,12 @@ public class SysmapBody {
 		return false;
 	}
 
-	public static String getAbbreviatedType(SysmapBody b) {
-		return BodyUtil.getAbbreviatedType(b.getStarClass(), b.getPlanetClass(), b.isTerraformingCandidate());
+	public static String getAbbreviatedType(SysmapBody b, StarClass starClass) {
+		return BodyUtil.getAbbreviatedType(b.getStarClass(), b.getPlanetClass(), b.isTerraformingCandidate(starClass));
 	}
 
-	public static long estimatePayout(SysmapBody b) {
-		return BodyUtil.estimatePayout(b.getStarClass(), b.getPlanetClass(), b.isTerraformingCandidate());
+	public static long estimatePayout(SysmapBody b, StarClass starClass) {
+		return BodyUtil.estimatePayout(b.getStarClass(), b.getPlanetClass(), b.isTerraformingCandidate(starClass));
 	}
 
 	public StarClass getStarClass() {
@@ -72,8 +72,8 @@ public class SysmapBody {
 		return null;
 	}
 
-	public boolean isTerraformingCandidate() {
-		if (this.bestBodyMatch != null && this.distanceLs != null && this.earthMasses != null && this.radiusKm != null) {
+	public boolean isTerraformingCandidate(StarClass starClass) {
+		if (this.bestBodyMatch != null && this.semiMajorAxisAu != null && this.earthMasses != null && this.radiusKm != null) {
 			//        		Statistics of 44470 WWs:
 			//        		distanceToArrivalLs:    min=9.00 / 1%=55.00 / 5%=107.00 / 10%=181.00 / med=811.00 / 90%=9634.00 / 95%=37270.00 / 99%=252147.00 / max=628531.00
 			//        		semiMajorAxisAu:        min=0.01 / 1%=0.02 / 5%=0.12 / 10%=0.21 / med=1.04 / 90%=3.18 / 95%=3.80 / 99%=5.27 / max=10.93
@@ -94,13 +94,36 @@ public class SysmapBody {
 			//        		earthMasses:            min=0.0713 / 1%=0.2453 / 5%=0.2748 / 10%=0.3020 / med=0.7004 / 90%=1.8148 / 95%=2.1458 / 99%=2.5796 / max=7.1000
 			//        		radiusKm:               min=2673 / 1%=3954 / 5%=4098 / 10%=4220 / med=5481 / 90%=7246 / 95%=7603 / 99%=8022 / max=10631
 			//        		gravityG:               min=0.41 / 1%=0.63 / 5%=0.66 / 10%=0.69 / med=0.95 / 90%=1.40 / 95%=1.51 / 99%=1.63 / max=2.55
+			//
+			//        		Habitable zone according to EDDiscovery:
+			//        		O:                      ???
+			//        		B:                      144 AU - 288 AU
+			//        		A:                      1.8 AU - 3.8 AU
+			//        		F:                      0.7 AU - 1.5 AU
+			//        		G:                      0.6 AU - 1.3 AU
+			//        		K:                      0.4 AU - 0.9 AU
+			//        		M:                      0.1 AU - 0.3 AU
 
-			if (this.distanceLs.intValue() >= 50 && this.earthMasses.floatValue() >= 0.05f && this.radiusKm.intValue() >= 2600) { // TODO Semi major axis <= 4.00 AU
+			if (this.earthMasses.floatValue() >= 0.05f && this.radiusKm.intValue() >= 2600) {
 				BigDecimal gravityG = BodyUtil.calculateGravityG(this.earthMasses, this.radiusKm);
 				if (gravityG.floatValue() >= 0.4f && gravityG.floatValue() <= 2.0f) {
 					PlanetClass planetClass = this.getPlanetClass();
 					if (planetClass == PlanetClass.WATER_WORLD || planetClass == PlanetClass.HIGH_METAL_CONTENT_BODY) {
-						return true;
+						if (starClass == null || this.semiMajorAxisAu.floatValue() == 0.0f || (this.semiMajorAxisAu.floatValue() >= 0.1f && this.semiMajorAxisAu.floatValue() <= 4.0f)) {
+							return true;
+						} else if (starClass == StarClass.M) {
+							return this.semiMajorAxisAu.floatValue() >= 0.1f && this.semiMajorAxisAu.floatValue() <= 0.3f;
+						} else if (starClass == StarClass.K) {
+							return this.semiMajorAxisAu.floatValue() >= 0.4f && this.semiMajorAxisAu.floatValue() <= 0.9f;
+						} else if (starClass == StarClass.G) {
+							return this.semiMajorAxisAu.floatValue() >= 0.6f && this.semiMajorAxisAu.floatValue() <= 1.3f;
+						} else if (starClass == StarClass.F) {
+							return this.semiMajorAxisAu.floatValue() >= 0.7f && this.semiMajorAxisAu.floatValue() <= 1.5f;
+						} else if (starClass == StarClass.A) {
+							return this.semiMajorAxisAu.floatValue() >= 1.8f && this.semiMajorAxisAu.floatValue() <= 3.8f;
+						} else if (starClass == StarClass.B) {
+							return this.semiMajorAxisAu.floatValue() >= 144f && this.semiMajorAxisAu.floatValue() <= 288f;
+						}
 					}
 				}
 			}

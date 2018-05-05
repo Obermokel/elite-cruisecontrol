@@ -57,6 +57,7 @@ import borg.ed.cruisecontrol.templatematching.TemplateRgb;
 import borg.ed.cruisecontrol.util.ImageUtil;
 import borg.ed.cruisecontrol.util.MouseUtil;
 import borg.ed.universe.constants.PlanetClass;
+import borg.ed.universe.constants.StarClass;
 import georegression.struct.shapes.EllipseRotated_F64;
 
 public class SysmapScanner {
@@ -116,7 +117,7 @@ public class SysmapScanner {
 	 * @param creditsMode 
 	 * @throws InterruptedException
 	 */
-	public SysmapScannerResult scanSystemMap(Planar<GrayF32> rgb, Planar<GrayF32> hsv, String systemName, boolean creditsMode) throws InterruptedException {
+	public SysmapScannerResult scanSystemMap(Planar<GrayF32> rgb, Planar<GrayF32> hsv, String systemName, boolean creditsMode, StarClass starClass) throws InterruptedException {
 		// Search for the UC logo - if found, the system map is open and can be scanned
 		if (!this.isUniversalCartographicsLogoVisible(rgb)) {
 			return null;
@@ -535,7 +536,7 @@ public class SysmapScanner {
 						g2.drawString("???", b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 30);
 						g2.drawString("?.???%", b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 45);
 					} else {
-						g2.drawString(SysmapBody.getAbbreviatedType(b), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 30);
+						g2.drawString(SysmapBody.getAbbreviatedType(b, starClass), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 30);
 						g2.drawString(String.format(Locale.US, "%.3f%%", b.bestBodyMatch.getErrorPerPixel() * 100), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 45);
 					}
 					if (b.earthMasses != null) {
@@ -556,7 +557,7 @@ public class SysmapScanner {
 
 			// Finished
 			logger.info(String.format(Locale.US, "System map scan took %,d ms, found %d bodies", System.currentTimeMillis() - scanStart, bodies.size()));
-			this.writeDebugImages(rgb, gray, binary, systemName, bodies);
+			this.writeDebugImages(rgb, gray, binary, systemName, bodies, starClass);
 			return new SysmapScannerResult(rgb, hsv, bodies);
 		}
 	}
@@ -1016,7 +1017,7 @@ public class SysmapScanner {
 		}
 	}
 
-	private void writeDebugImages(Planar<GrayF32> rgb, GrayF32 gray, GrayU8 binary, String systemName, List<SysmapBody> bodies) {
+	private void writeDebugImages(Planar<GrayF32> rgb, GrayF32 gray, GrayU8 binary, String systemName, List<SysmapBody> bodies, StarClass starClass) {
 		try {
 			File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
 			if (!debugFolder.exists()) {
@@ -1043,7 +1044,7 @@ public class SysmapScanner {
 						if (b.bestBodyMatch == null) {
 							g.drawString("???", b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 30);
 						} else {
-							g.drawString(SysmapBody.getAbbreviatedType(b), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 30);
+							g.drawString(SysmapBody.getAbbreviatedType(b, starClass), b.areaInImage.x + b.areaInImage.width + 2, b.areaInImage.y + 30);
 						}
 					}
 					g.dispose();
