@@ -84,6 +84,7 @@ public class SysmapScanner {
 	private Template refMoonMasses = null;
 	private Template refEarthMasses = null;
 	private Template refRadius = null;
+	private Template refSemiMajorAxis = null;
 	private List<Template> textTemplates = null;
 	private List<TemplateRgb> refSysMapBodies = null;
 
@@ -813,6 +814,8 @@ public class SysmapScanner {
 			logger.trace("Best MOON MASSES match = " + mMoonMasses.getErrorPerPixel());
 			TemplateMatch mEarthMasses = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refEarthMasses);
 			logger.trace("Best EARTH MASSES match = " + mEarthMasses.getErrorPerPixel());
+			TemplateMatch mSemiMajorAxis = TemplateMatcher.findBestMatchingLocationInRegion(b.grayDebugImage, 0, 180, 210, 400, refSemiMajorAxis);
+			logger.trace("Best SEMI MAJOR AXIS match = " + mSemiMajorAxis.getErrorPerPixel());
 
 			if (mArrivalPoint.getErrorPerPixel() <= 0.05f) {
 				int apX0 = Math.min(b.grayDebugImage.width - 1, mArrivalPoint.getX() + mArrivalPoint.getWidth());
@@ -918,6 +921,26 @@ public class SysmapScanner {
 				}
 			}
 
+			if (mSemiMajorAxis.getErrorPerPixel() <= 0.05f) {
+				int smaX0 = Math.min(b.grayDebugImage.width - 1, mSemiMajorAxis.getX() + mSemiMajorAxis.getWidth());
+				int smaY0 = Math.max(0, mArrivalPoint.getY() - 5);
+				int smaX1 = Math.min(b.grayDebugImage.width - 1, smaX0 + 225);
+				int smaY1 = Math.min(b.grayDebugImage.height - 1, smaY0 + 30);
+				String semiMajorAxisText = this.scanText(b.grayDebugImage.subimage(smaX0, smaY0, smaX1, smaY1), textTemplates);
+				logger.trace("...semiMajorAxisText='" + semiMajorAxisText + "'");
+				Pattern p = Pattern.compile(".*?(\\d+.*\\d+.*AU).*?");
+				Matcher m = p.matcher(semiMajorAxisText);
+				if (m.matches()) {
+					StringBuilder sb = new StringBuilder(m.group(1).replaceAll("\\D", ""));
+					try {
+						sb.insert(sb.length() - 2, ".");
+						b.semiMajorAxisAu = new BigDecimal(sb.toString());
+					} catch (Exception e) {
+						logger.error("Failed to parse '" + sb + "' (derived from the original '" + m.group(1) + "') to a BigDecimal");
+					}
+				}
+			}
+
 			return true;
 		}
 	}
@@ -985,6 +1008,7 @@ public class SysmapScanner {
 			this.refMoonMasses = Template.fromFile(new File(refDir, "moon_masses.png"));
 			this.refEarthMasses = Template.fromFile(new File(refDir, "earth_masses.png"));
 			this.refRadius = Template.fromFile(new File(refDir, "radius.png"));
+			this.refSemiMajorAxis = Template.fromFile(new File(refDir, "semi_major_axis.png"));
 			this.textTemplates = Template.fromFolder(new File(refDir, "sysmapText"));
 			this.refSysMapBodies = TemplateRgb.fromFolder(new File(refDir, "sysmapBodies"));
 		} catch (IOException e) {

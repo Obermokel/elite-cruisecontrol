@@ -23,6 +23,7 @@ public class SysmapBody {
 	public BigDecimal moonMasses = null;
 	public BigDecimal earthMasses = null;
 	public BigDecimal radiusKm = null;
+	public BigDecimal semiMajorAxisAu = null;
 	public Planar<GrayF32> rgbDebugImage = null;
 	public GrayF32 grayDebugImage = null;
 
@@ -135,6 +136,7 @@ public class SysmapBody {
 		sb.append("; ").append("moonMasses=").append(this.moonMasses);
 		sb.append("; ").append("earthMasses=").append(this.earthMasses);
 		sb.append("; ").append("radiusKm=").append(this.radiusKm);
+		sb.append("; ").append("semiMajorAxisAu=").append(this.semiMajorAxisAu);
 		sb.append("]");
 		return sb.toString();
 	}
@@ -146,6 +148,7 @@ public class SysmapBody {
 		sb.append("; ").append("moonMasses=").append(this.moonMasses);
 		sb.append("; ").append("earthMasses=").append(this.earthMasses);
 		sb.append("; ").append("radiusKm=").append(this.radiusKm);
+		sb.append("; ").append("semiMajorAxisAu=").append(this.semiMajorAxisAu);
 		sb.append("]");
 		return sb.toString();
 	}
@@ -160,6 +163,7 @@ public class SysmapBody {
 		this.moonMasses = null;
 		this.earthMasses = null;
 		this.radiusKm = null;
+		this.semiMajorAxisAu = null;
 	}
 
 }
