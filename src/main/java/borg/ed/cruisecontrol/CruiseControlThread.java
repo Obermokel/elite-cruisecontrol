@@ -1648,6 +1648,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				}
 				if (this.cruiseSettings.getWaypoints().isEmpty()) {
 					this.doEmergencyExit(REASON_END_OF_PLOTTED_ROUTE);
+					return;
 				}
 				CruiseControlApplication.myVisitedSystems.add(fsdJumpEvent.getStarSystem());
 				CruiseControlApplication.jumpsSession++;
@@ -1685,6 +1686,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 							return;
 						}
 					}
+				} else if (this.nextValuableSystem == null) {
+					this.nextValuableSystem = new ValuableSystem(this.cruiseSettings.getWaypoints().get(0), new Coord(), 0);
+					this.gameState = GameState.PLOT_TO_NEXT_VALUABLE_SYSTEM;
+					logger.debug("Arrived at " + fsdJumpEvent.getStarSystem() + ", honking and plotting to the next waypoint system");
+					return;
 				}
 				this.gameState = GameState.WAIT_FOR_FSD_COOLDOWN;
 				logger.debug("Arrived at " + fsdJumpEvent.getStarSystem() + ", honking and waiting for FSD cooldown to start");
