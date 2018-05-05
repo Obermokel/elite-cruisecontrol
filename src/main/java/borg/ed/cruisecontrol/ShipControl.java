@@ -384,7 +384,7 @@ public class ShipControl {
 	}
 
 	private void pressKey(int keyCode) {
-		this.pressKey(keyCode, 45);
+		this.pressKey(keyCode, 85 + (long) (Math.random() * 10));
 	}
 
 	private void pressKey(int keyCode, long millis) {
