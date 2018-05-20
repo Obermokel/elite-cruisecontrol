@@ -568,17 +568,17 @@ public class SysmapScanner {
 				Planar<GrayF32> bodyImage = result.getRgb().subimage(b.areaInImage.x, b.areaInImage.y, b.areaInImage.x + b.areaInImage.width, b.areaInImage.y + b.areaInImage.height);
 				TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(bodyImage, this.refSysMapBodies);
 				b.bestBodyMatch = bestMatch;
-				logger.debug("Guessed body type of " + b + " to be " + bestMatch);
+				logger.debug("Guessed body type of " + b + " to be " + bestMatch + " (" + bestMatch.getTemplate().getFile().getName() + ")");
 			}
 		}
 	}
 
 	private void guessBodyTypes(List<SysmapBody> bodies, Planar<GrayF32> rgb) {
 		for (SysmapBody b : bodies) {
-			logger.debug("Guessing body type of " + b);
 			Planar<GrayF32> bodyImage = rgb.subimage(b.areaInImage.x, b.areaInImage.y, b.areaInImage.x + b.areaInImage.width, b.areaInImage.y + b.areaInImage.height);
 			TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(bodyImage, this.refSysMapBodies);
 			b.bestBodyMatch = bestMatch;
+			logger.debug("Guessed body type of " + b + " to be " + bestMatch + " (" + bestMatch.getTemplate().getFile().getName() + ")");
 		}
 	}
 
