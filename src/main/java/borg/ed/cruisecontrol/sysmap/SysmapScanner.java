@@ -924,7 +924,7 @@ public class SysmapScanner {
 
 			if (mSemiMajorAxis.getErrorPerPixel() <= 0.05f) {
 				int smaX0 = Math.min(b.grayDebugImage.width - 1, mSemiMajorAxis.getX() + mSemiMajorAxis.getWidth());
-				int smaY0 = Math.max(0, mArrivalPoint.getY() - 5);
+				int smaY0 = Math.max(0, mSemiMajorAxis.getY() - 5);
 				int smaX1 = Math.min(b.grayDebugImage.width - 1, smaX0 + 225);
 				int smaY1 = Math.min(b.grayDebugImage.height - 1, smaY0 + 30);
 				String semiMajorAxisText = this.scanText(b.grayDebugImage.subimage(smaX0, smaY0, smaX1, smaY1), textTemplates);
