@@ -1790,7 +1790,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					if (this.currentSysmapBody.bestBodyMatch != null) {
 						String guessedBodyType = this.currentSysmapBody.bestBodyMatch.getTemplate().getName();
 						if (StringUtils.isNotEmpty(scannedBodyType) && !scannedBodyType.equals(guessedBodyType)) {
-							logger.warn("Wrongly guessed " + guessedBodyType + ", but was " + scannedBodyType);
+							logger.warn(
+									"Wrongly guessed " + guessedBodyType + ", but was " + scannedBodyType + ", now deleting " + this.currentSysmapBody.bestBodyMatch.getTemplate().getFile());
+							this.currentSysmapBody.bestBodyMatch.getTemplate().getFile().delete();
 							try {
 								BufferedImage planetImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(this.currentSysmapBody.bestBodyMatch.getImage()), null, true);
 								File refFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/sysmapBodies/" + scannedBodyType);
