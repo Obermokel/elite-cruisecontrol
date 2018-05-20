@@ -1737,8 +1737,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				if (this.nextValuableSystem != null && fsdJumpEvent.getStarSystem().equals(this.nextValuableSystem.getName())) {
 					this.nextValuableSystem = null;
 				}
-				this.lastValuableSystemsRadiusLy = 500;
+				this.lastValuableSystemsRadiusLy = 100;
 				this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), this.lastValuableSystemsRadiusLy, this.cruiseSettings.getWaypoints().get(0));
+				if (this.valuableSystems.isEmpty()) {
+					this.lastValuableSystemsRadiusLy = 500;
+					this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), this.lastValuableSystemsRadiusLy, this.cruiseSettings.getWaypoints().get(0));
+				}
 				if (this.valuableSystems.isEmpty()) {
 					this.lastValuableSystemsRadiusLy = 1000;
 					this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), this.lastValuableSystemsRadiusLy, this.cruiseSettings.getWaypoints().get(0));
