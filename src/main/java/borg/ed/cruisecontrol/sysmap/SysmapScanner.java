@@ -620,8 +620,6 @@ public class SysmapScanner {
 				}
 			}
 
-			logger.debug("Extracting data for body" + bodies.indexOf(b));
-
 			final long start = System.currentTimeMillis();
 
 			// Hover over body, wait until data is displayed and extract
@@ -671,6 +669,8 @@ public class SysmapScanner {
 					b.clearData();
 				}
 			}
+
+			logger.debug("Extracted data for body" + bodies.indexOf(b) + ": " + b);
 		}
 	}
 
