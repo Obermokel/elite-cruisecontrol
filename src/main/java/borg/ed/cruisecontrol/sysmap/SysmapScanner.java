@@ -732,15 +732,6 @@ public class SysmapScanner {
 				int width = 80;
 				int height = 250;
 				logger.debug(mUnexplored + " --> " + x + "," + y);
-				try {
-					ImageIO.write(ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true), "PNG",
-							new File(System.getProperty("user.home"), "target_button_" + new SimpleDateFormat("yyyy-MM-dd HH-mm-ss").format(new Date()) + "_rgb.png"));
-					ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(gray), null), "PNG",
-							new File(System.getProperty("user.home"), "target_button_" + new SimpleDateFormat("yyyy-MM-dd HH-mm-ss").format(new Date()) + "_gray.png"));
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
 				TemplateMatchRgb mButton = TemplateMatcher.findBestMatchingLocationInRegion(rgb, x, y, width, height, this.refTargetButton);
 				TemplateMatchRgb mButtonInactive = TemplateMatcher.findBestMatchingLocationInRegion(rgb, x, y, width, height, this.refTargetButtonInactive);
 				TemplateMatchRgb mButtonInactiveHovered = TemplateMatcher.findBestMatchingLocationInRegion(rgb, x, y, width, height, this.refTargetButtonInactiveHovered);
