@@ -2024,6 +2024,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 							b.moonMasses == null && // No belts please
 							(!allowStars ? b.solarMasses == null : true) && // No further stars if already scanned one
 							(b.earthMasses == null || b.earthMasses.floatValue() > 0.0099f) && // Not every mini-moon (0.99% and less earth masses) pls
+							(b.bestBodyMatch == null || b.bestBodyMatch.getErrorPerPixel() > 0.001f || SysmapBody.estimatePayout(b, this.nextStarClass) > 1000) && // No icy/rocky/ricer
 							((b.distanceLs != null && (b.distanceLs.intValue() <= 12345 || (SysmapBody.estimatePayout(b, this.nextStarClass) >= 200000 && b.distanceLs.intValue() < 23456)
 									|| (SysmapBody.estimatePayout(b, this.nextStarClass) >= 500000 && b.distanceLs.intValue() < 56789))) || (b.solarMasses != null))) // Only close distance (or stars)
 					.sorted(new SensibleScanOrderComparator()).findFirst().orElse(null);
