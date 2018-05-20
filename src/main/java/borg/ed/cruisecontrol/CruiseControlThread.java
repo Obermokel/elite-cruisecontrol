@@ -45,6 +45,8 @@ import boofcv.abst.feature.associate.ScoreAssociation;
 import boofcv.abst.feature.detdesc.DetectDescribePoint;
 import boofcv.abst.feature.detect.interest.ConfigFastHessian;
 import boofcv.alg.descriptor.UtilFeature;
+import boofcv.alg.filter.blur.GBlurImageOps;
+import boofcv.core.image.ConvertImage;
 import boofcv.factory.feature.associate.FactoryAssociation;
 import boofcv.factory.feature.detdesc.FactoryDetectDescribe;
 import boofcv.io.image.ConvertBufferedImage;
@@ -1929,12 +1931,12 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		try {
 			this.sysmapScanner.ensureDetailsTabIsVisible();
 
+			Planar<GrayF32> rgb = null;
+			Planar<GrayF32> hsv = null;
 			// Hover over body, wait until data is displayed and extract
 			this.shipControl.mouseMoveOnScreen((b.centerOnScreen.x - 5) + random.nextInt(10), (b.centerOnScreen.y - 5) + random.nextInt(10));
 			Thread.sleep(250 + random.nextInt(250));
 			while ((System.currentTimeMillis() - start) < 1500L) {
-				Planar<GrayF32> rgb = null;
-				Planar<GrayF32> hsv = null;
 				synchronized (screenConverterResult) {
 					screenConverterResult.wait();
 					rgb = screenConverterResult.getRgb().clone();
@@ -1957,8 +1959,6 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				this.shipControl.mouseMoveOnScreen((b.centerOnScreen.x - 5) + random.nextInt(10), (b.centerOnScreen.y - 5) + random.nextInt(10));
 				Thread.sleep(250 + random.nextInt(250));
 				while ((System.currentTimeMillis() - start) < 4500L) {
-					Planar<GrayF32> rgb = null;
-					Planar<GrayF32> hsv = null;
 					synchronized (screenConverterResult) {
 						screenConverterResult.wait();
 						rgb = screenConverterResult.getRgb().clone();
@@ -1973,34 +1973,37 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			// Check again
 			if (!hovered.hasSameData(b)) {
 				logger.warn("Did not find " + b + " in sysmap, instead found " + hovered);
+				try {
+					File debugFolder = new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/debug");
+					if (!debugFolder.exists()) {
+						debugFolder = new File(System.getProperty("user.home"), "CruiseControl/debug");
+					}
+					final String ts = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss-SSS").format(new Date());
+
+					BufferedImage debugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(rgb), null, true);
+					ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " WRONG_BODY_DATA_RGB.png"));
+
+					GrayF32 grayDebugImage = ConvertImage.average(rgb, null);
+					grayDebugImage = GBlurImageOps.gaussian(grayDebugImage, null, -1, 3, null);
+					for (int y = 0; y < hsv.height; y++) {
+						for (int x = 0; x < hsv.width; x++) {
+							float v = hsv.bands[2].unsafe_get(x, y);
+							float s = hsv.bands[1].unsafe_get(x, y);
+							if (v < 0.45f || s > 0.2f) {
+								grayDebugImage.unsafe_set(x, y, 0f);
+							}
+						}
+					}
+
+					debugImage = ConvertBufferedImage.convertTo(ImageUtil.denormalize255(grayDebugImage), null);
+					ImageIO.write(debugImage, "PNG", new File(debugFolder, "DEBUG " + CruiseControlApplication.myCommanderName + " " + ts + " WRONG_BODY_DATA_GRAY.png"));
+				} catch (IOException e) {
+					logger.error("Failed to write debug image", e);
+				}
 				return false;
 			} else {
-				//				// TODO Might click on target button directly from here? Why first click on body and scroll map?
-				//				this.shipControl.leftClick(); // Click on body
-				//				Thread.sleep(1500 + random.nextInt(500)); // Wait for map to scroll
-				//				this.robot.mouseMove(this.screenRect.width / 2, this.screenRect.height / 2); // Move mouse to now centered planet
-				//				Thread.sleep(250 + random.nextInt(250));
-				//				while ((System.currentTimeMillis() - start) < 10000L) {
-				//					Planar<GrayF32> rgb = null;
-				//					Planar<GrayF32> hsv = null;
-				//					synchronized (screenConverterResult) {
-				//						screenConverterResult.wait();
-				//						rgb = screenConverterResult.getRgb().clone();
-				//						hsv = screenConverterResult.getHsv().clone();
-				//					}
-				//					hovered.clearData();
-				//					if (this.sysmapScanner.extractBodyData(rgb, hsv, hovered)) {
-				//						break;
-				//					}
-				//				}
-				//
-				//				if (!hovered.hasSameData(b)) {
-				//					logger.warn("Did not find " + b + " in sysmap after scrolling to it, instead found " + hovered);
-				//					return false;
-				//				} else {
 				logger.debug("Found " + b + " and clicked on it, now waiting for target button to click on");
 				return this.sysmapScanner.clickOnTargetButton();
-				//				}
 			}
 		} catch (InterruptedException e) {
 			logger.warn("Interrupted while clicking on system map", e);
