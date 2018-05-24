@@ -24,9 +24,8 @@ public class CruiseSettings {
 
 	public static CruiseSettings load() throws IOException {
 		File settingsFile = new File(System.getProperty("user.home"), "cruise-settings.json");
-		File sharedDir = new File("X:\\Spiele\\Elite Dangerous");
-		if (sharedDir.exists() && !CruiseControlApplication.myCommanderName.toLowerCase().contains("unknown")) {
-			settingsFile = new File(sharedDir, "cruise-settings " + CruiseControlApplication.myCommanderName + ".json");
+		if (!CruiseControlApplication.myCommanderName.toLowerCase().contains("unknown")) {
+			settingsFile = new File(System.getProperty("user.home"), "cruise-settings " + CruiseControlApplication.myCommanderName + ".json");
 		}
 		if (settingsFile.exists()) {
 			try (InputStreamReader reader = new InputStreamReader(new BufferedInputStream(new FileInputStream(settingsFile)), "UTF-8")) {
@@ -38,9 +37,8 @@ public class CruiseSettings {
 
 	public static void save(CruiseSettings settings) throws IOException {
 		File settingsFile = new File(System.getProperty("user.home"), "cruise-settings.json");
-		File sharedDir = new File("X:\\Spiele\\Elite Dangerous");
-		if (sharedDir.exists() && !CruiseControlApplication.myCommanderName.toLowerCase().contains("unknown")) {
-			settingsFile = new File(sharedDir, "cruise-settings " + CruiseControlApplication.myCommanderName + ".json");
+		if (!CruiseControlApplication.myCommanderName.toLowerCase().contains("unknown")) {
+			settingsFile = new File(System.getProperty("user.home"), "cruise-settings " + CruiseControlApplication.myCommanderName + ".json");
 		}
 		try (OutputStreamWriter writer = new OutputStreamWriter(new BufferedOutputStream(new FileOutputStream(settingsFile)), "UTF-8")) {
 			gson.toJson(settings, writer);

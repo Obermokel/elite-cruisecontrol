@@ -11,7 +11,7 @@
     </appender>
 
     <appender name="FILE" class="ch.qos.logback.core.FileAppender">
-	    <file>X:/Spiele/Elite Dangerous/cruisecontrol-${bySecond}.log</file>
+	    <file>${user.home}/cruisecontrol-${bySecond}.log</file>
 	    <append>true</append>
         <encoder>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} - %-5level %-24thread %-36logger{36} - %msg%n</pattern>
