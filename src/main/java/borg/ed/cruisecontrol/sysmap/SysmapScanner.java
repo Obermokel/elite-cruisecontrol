@@ -565,7 +565,19 @@ public class SysmapScanner {
 	public void guessBodyTypes(SysmapScannerResult result) {
 		if (result != null) {
 			for (SysmapBody b : result.getBodies()) {
-				Planar<GrayF32> bodyImage = result.getRgb().subimage(b.areaInImage.x, b.areaInImage.y, b.areaInImage.x + b.areaInImage.width, b.areaInImage.y + b.areaInImage.height);
+				Planar<GrayF32> bodyImage = result.getRgb().subimage(b.areaInImage.x, b.areaInImage.y, b.areaInImage.x + b.areaInImage.width, b.areaInImage.y + b.areaInImage.height).clone();
+				for (int y = 0; y < bodyImage.height; y++) {
+					for (int x = 0; x < bodyImage.width; x++) {
+						float r = bodyImage.getBand(0).unsafe_get(x, y);
+						float g = bodyImage.getBand(1).unsafe_get(x, y);
+						float bb = bodyImage.getBand(2).unsafe_get(x, y);
+						if (r >= 0.360784f && r <= 0.415687f && g >= 0.360784f && g <= 0.4f && bb >= 0.360784f && bb <= 0.392157f) {
+							bodyImage.getBand(0).unsafe_set(x, y, 0f);
+							bodyImage.getBand(1).unsafe_set(x, y, 0f);
+							bodyImage.getBand(2).unsafe_set(x, y, 0f);
+						}
+					}
+				}
 				TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(bodyImage, this.refSysMapBodies);
 				b.bestBodyMatch = bestMatch;
 				logger.debug("Guessed body type of " + b + " to be " + bestMatch + " (" + bestMatch.getTemplate().getFile().getName() + ")");
@@ -575,7 +587,19 @@ public class SysmapScanner {
 
 	private void guessBodyTypes(List<SysmapBody> bodies, Planar<GrayF32> rgb) {
 		for (SysmapBody b : bodies) {
-			Planar<GrayF32> bodyImage = rgb.subimage(b.areaInImage.x, b.areaInImage.y, b.areaInImage.x + b.areaInImage.width, b.areaInImage.y + b.areaInImage.height);
+			Planar<GrayF32> bodyImage = rgb.subimage(b.areaInImage.x, b.areaInImage.y, b.areaInImage.x + b.areaInImage.width, b.areaInImage.y + b.areaInImage.height).clone();
+			for (int y = 0; y < bodyImage.height; y++) {
+				for (int x = 0; x < bodyImage.width; x++) {
+					float r = bodyImage.getBand(0).unsafe_get(x, y);
+					float g = bodyImage.getBand(1).unsafe_get(x, y);
+					float bb = bodyImage.getBand(2).unsafe_get(x, y);
+					if (r >= 0.360784f && r <= 0.415687f && g >= 0.360784f && g <= 0.4f && bb >= 0.360784f && bb <= 0.392157f) {
+						bodyImage.getBand(0).unsafe_set(x, y, 0f);
+						bodyImage.getBand(1).unsafe_set(x, y, 0f);
+						bodyImage.getBand(2).unsafe_set(x, y, 0f);
+					}
+				}
+			}
 			TemplateMatchRgb bestMatch = TemplateMatcher.findBestMatchingTemplate(bodyImage, this.refSysMapBodies);
 			b.bestBodyMatch = bestMatch;
 			logger.debug("Guessed body type of " + b + " to be " + bestMatch + " (" + bestMatch.getTemplate().getFile().getName() + ")");
@@ -1003,6 +1027,22 @@ public class SysmapScanner {
 			this.refSemiMajorAxis = Template.fromFile(new File(refDir, "semi_major_axis.png"));
 			this.textTemplates = Template.fromFolder(new File(refDir, "sysmapText"));
 			this.refSysMapBodies = TemplateRgb.fromFolder(new File(refDir, "sysmapBodies"));
+
+			// Remove lines from sysmap bodies
+			for (TemplateRgb refSysMapBody : this.refSysMapBodies) {
+				for (int y = 0; y < refSysMapBody.getPixels().height; y++) {
+					for (int x = 0; x < refSysMapBody.getPixels().width; x++) {
+						float r = refSysMapBody.getPixels().getBand(0).unsafe_get(x, y);
+						float g = refSysMapBody.getPixels().getBand(1).unsafe_get(x, y);
+						float b = refSysMapBody.getPixels().getBand(2).unsafe_get(x, y);
+						if (r >= 0.360784f && r <= 0.415687f && g >= 0.360784f && g <= 0.4f && b >= 0.360784f && b <= 0.392157f) {
+							refSysMapBody.getPixels().getBand(0).unsafe_set(x, y, 0f);
+							refSysMapBody.getPixels().getBand(1).unsafe_set(x, y, 0f);
+							refSysMapBody.getPixels().getBand(2).unsafe_set(x, y, 0f);
+						}
+					}
+				}
+			}
 		} catch (IOException e) {
 			logger.error("Failed to load ref images", e);
 		}
