@@ -127,6 +127,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private boolean fsdCharging = false;
 	private long fsdChargingSince = Long.MAX_VALUE;
 	private long getInScoopingRangeSince = Long.MAX_VALUE;
+	private long waitForFsdCooldownSince = Long.MAX_VALUE;
 	private boolean jumpTargetIsScoopable = false;
 	private StarClass nextStarClass = null;
 	private long escapeFromNonScoopableSince = Long.MAX_VALUE;
@@ -407,6 +408,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		case WAIT_FOR_FSD_COOLDOWN:
 			if (this.shipControl.getThrottle() > 0) {
 				this.shipControl.setThrottle(0);
+			}
+			if (System.currentTimeMillis() - waitForFsdCooldownSince > 10000) {
+				logger.warn("FSD cooldown not triggered within 10 seconds, getting in scooping range now");
+				this.shipControl.setThrottle(0);
+				this.gameState = GameState.GET_IN_SCOOPING_RANGE;
 			}
 			break;
 		case GET_IN_SCOOPING_RANGE:
@@ -1730,6 +1736,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				CruiseControlApplication.explorationPayoutTotal += 2000;
 				this.fuelLevel = fsdJumpEvent.getFuelLevel().floatValue();
 				this.inHyperspaceSince = Long.MAX_VALUE;
+				this.waitForFsdCooldownSince = Long.MAX_VALUE;
 				this.shipControl.honkDelayed(2000);
 				this.honkingSince = System.currentTimeMillis() + 2000;
 				this.currentSystemName = fsdJumpEvent.getStarSystem();
@@ -1768,6 +1775,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					return;
 				}
 				this.gameState = GameState.WAIT_FOR_FSD_COOLDOWN;
+				this.waitForFsdCooldownSince = System.currentTimeMillis();
 				logger.debug("Arrived at " + fsdJumpEvent.getStarSystem() + ", honking and waiting for FSD cooldown to start");
 			} else if (event instanceof FuelScoopEvent) {
 				this.fuelLevel = ((FuelScoopEvent) event).getTotal().floatValue();
@@ -2011,6 +2019,9 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			}
 		} catch (InterruptedException e) {
 			logger.warn("Interrupted while clicking on system map", e);
+			return false;
+		} catch (Exception e) {
+			logger.error("Exception while clicking on system map", e);
 			return false;
 		}
 	}
