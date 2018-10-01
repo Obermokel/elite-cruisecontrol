@@ -362,6 +362,10 @@ public class ShipControl {
 	}
 
 	public synchronized void exitToMainMenu() {
+		this.exitToMainMenu(16000); // Wait more than 15s because most likely we are in danger
+	}
+
+	public synchronized void exitToMainMenu(long dangerWaitMillis) {
 		try {
 			Point pExitToMainMenu = mouseUtil.imageToScreen(new Point(200, 390));
 			Point pYes = mouseUtil.imageToScreen(new Point(900, 660));
@@ -373,7 +377,7 @@ public class ShipControl {
 			this.robot.mouseMove(pExitToMainMenu.x, pExitToMainMenu.y);
 			Thread.sleep(500);
 			this.leftClick();
-			Thread.sleep(16000); // Wait more than 15s because most likely we are in danger
+			Thread.sleep(dangerWaitMillis);
 			this.robot.mouseMove(pYes.x, pYes.y);
 			Thread.sleep(500);
 			this.leftClick();

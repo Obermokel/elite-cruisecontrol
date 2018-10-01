@@ -74,6 +74,7 @@ import borg.ed.universe.journal.events.AbstractJournalEvent;
 import borg.ed.universe.journal.events.DiscoveryScanEvent;
 import borg.ed.universe.journal.events.FSDJumpEvent;
 import borg.ed.universe.journal.events.FuelScoopEvent;
+import borg.ed.universe.journal.events.ReceiveTextEvent;
 import borg.ed.universe.journal.events.ScanEvent;
 import borg.ed.universe.journal.events.StartJumpEvent;
 import borg.ed.universe.model.Body;
@@ -87,6 +88,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	static final Logger logger = LoggerFactory.getLogger(CruiseControlThread.class);
 
 	private static final String REASON_END_OF_PLOTTED_ROUTE = "End of plotted route";
+	private static final String REASON_COMBAT_LOG = "Combat log";
 
 	@Autowired
 	private UniverseService universeService;
@@ -877,7 +879,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					}
 
 					// Deploy heatsink, full stop, then exit
-					if (!REASON_END_OF_PLOTTED_ROUTE.equals(reason)) {
+					if (!REASON_END_OF_PLOTTED_ROUTE.equals(reason) && !REASON_COMBAT_LOG.equals(reason)) {
 						this.shipControl.deployHeatsink();
 						try {
 							Thread.sleep(250);
@@ -891,7 +893,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					} catch (InterruptedException e) {
 						logger.warn("Interrupted while waiting after stopping ship");
 					}
-					this.shipControl.exitToMainMenu();
+					if (REASON_COMBAT_LOG.equals(reason)) {
+						this.shipControl.exitToMainMenu(500);
+					} else {
+						this.shipControl.exitToMainMenu();
+					}
 
 					// Wait until we are at the main menu
 					try {
@@ -1860,6 +1866,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						this.gameState = GameState.WAIT_FOR_SYSTEM_MAP;
 						logger.debug(scanEvent.getBodyName() + " scanned, waiting for system map at stand-still");
 					}
+				}
+			} else if (event instanceof ReceiveTextEvent) {
+				if ("npc".equalsIgnoreCase(((ReceiveTextEvent) event).getChannel())) {
+					this.doEmergencyExit(REASON_COMBAT_LOG);
+					return;
 				}
 			}
 		} catch (InterruptedException e) {
