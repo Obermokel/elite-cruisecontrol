@@ -1910,16 +1910,21 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				float maxAllowedDistance = nextWaypointDistance - (distanceToCandidate / 2); // At least half of the way must be towards our next waypoint
 				if (candidateDistanceToNextWaypoint <= maxAllowedDistance) {
 					List<Body> bodies = this.universeService.findBodiesByStarSystemName(candidateSystemName);
-					List<Body> valuableBodies = bodies.stream()
-							.filter(b -> b.getDistanceToArrival() != null && ((BodyUtil.estimatePayout(b) >= 200000 && b.getDistanceToArrival().intValue() < 23456)
-									|| (BodyUtil.estimatePayout(b) >= 500000 && b.getDistanceToArrival().intValue() < 56789)))
+					List<Body> arrivalStars = bodies.stream().filter(b -> b.getStarClass() != null && (b.getDistanceToArrival() == null || b.getDistanceToArrival().floatValue() == 0.0f))
 							.collect(Collectors.toList());
-					long payout = 0;
-					for (Body b : valuableBodies) {
-						payout += BodyUtil.estimatePayout(b);
-					}
-					if (payout >= 500_000) {
-						valuableSystems.add(new ValuableSystem(candidateSystemName, candidateSystemCoord, payout));
+					boolean nonScoopableArrivalStar = arrivalStars.size() == 1 && !arrivalStars.get(0).getStarClass().isScoopable();
+					if (!nonScoopableArrivalStar) {
+						List<Body> valuableBodies = bodies.stream()
+								.filter(b -> b.getDistanceToArrival() != null && ((BodyUtil.estimatePayout(b) >= 200000 && b.getDistanceToArrival().intValue() < 23456)
+										|| (BodyUtil.estimatePayout(b) >= 500000 && b.getDistanceToArrival().intValue() < 56789)))
+								.collect(Collectors.toList());
+						long payout = 0;
+						for (Body b : valuableBodies) {
+							payout += BodyUtil.estimatePayout(b);
+						}
+						if (payout >= 500_000) {
+							valuableSystems.add(new ValuableSystem(candidateSystemName, candidateSystemCoord, payout));
+						}
 					}
 				}
 			}
