@@ -1750,18 +1750,22 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				if (this.nextValuableSystem != null && fsdJumpEvent.getStarSystem().equals(this.nextValuableSystem.getName())) {
 					this.nextValuableSystem = null;
 				}
-				this.lastValuableSystemsRadiusLy = 100;
+				this.lastValuableSystemsRadiusLy = 75;
 				this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), this.lastValuableSystemsRadiusLy, this.cruiseSettings.getWaypoints().get(0));
 				if (this.valuableSystems.isEmpty()) {
-					this.lastValuableSystemsRadiusLy = 500;
+					this.lastValuableSystemsRadiusLy = 150;
 					this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), this.lastValuableSystemsRadiusLy, this.cruiseSettings.getWaypoints().get(0));
 				}
 				if (this.valuableSystems.isEmpty()) {
-					this.lastValuableSystemsRadiusLy = 1000;
+					this.lastValuableSystemsRadiusLy = 300;
 					this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), this.lastValuableSystemsRadiusLy, this.cruiseSettings.getWaypoints().get(0));
 				}
 				if (this.valuableSystems.isEmpty()) {
-					this.lastValuableSystemsRadiusLy = 2000;
+					this.lastValuableSystemsRadiusLy = 600;
+					this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), this.lastValuableSystemsRadiusLy, this.cruiseSettings.getWaypoints().get(0));
+				}
+				if (this.valuableSystems.isEmpty()) {
+					this.lastValuableSystemsRadiusLy = 1200;
 					this.valuableSystems = this.lookForValuableSystems(fsdJumpEvent.getStarPos(), this.lastValuableSystemsRadiusLy, this.cruiseSettings.getWaypoints().get(0));
 				}
 				if (!this.valuableSystems.isEmpty()) {
