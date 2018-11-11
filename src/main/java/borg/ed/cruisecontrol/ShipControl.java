@@ -44,7 +44,7 @@ public class ShipControl {
 		YAW_FACTOR.put(SHIP_ANACONDA, 4.5f);
 
 		// Asp Scout
-		PITCH_FACTOR.put(SHIP_ASP_SCOUT, 0.5f);
+		PITCH_FACTOR.put(SHIP_ASP_SCOUT, 0.4f);
 		ROLL_FACTOR.put(SHIP_ASP_SCOUT, 0.5f);
 		YAW_FACTOR.put(SHIP_ASP_SCOUT, 0.5f);
 
