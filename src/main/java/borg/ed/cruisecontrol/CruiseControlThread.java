@@ -135,6 +135,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private long escapeFromNonScoopableSince = Long.MAX_VALUE;
 	private long approachNextBodySince = Long.MAX_VALUE;
 	private String currentSystemName = "";
+	private Coord currentSystemCoord = new Coord();
 	private List<Body> currentSystemKnownBodies = new ArrayList<>();
 	private List<ScanEvent> currentSystemScannedBodies = new ArrayList<>();
 	private int currentSystemNumDiscoveredBodies = 0;
@@ -1521,12 +1522,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		g.drawString(String.format(Locale.US, "rollRight=%d%% / rollLeft=%d%%", this.shipControl.getRollRight(), this.shipControl.getRollLeft()), 10, 120);
 		g.drawString(String.format(Locale.US, "yawRight=%d%% / yawLeft=%d%%", this.shipControl.getYawRight(), this.shipControl.getYawLeft()), 10, 150);
 		g.drawString(String.format(Locale.US, "throttle=%d%%", this.shipControl.getThrottle()), 10, 180);
-		g.drawString(String.format(Locale.US, "fuel=%.1ft", this.fuelLevel), 10, 210);
+		g.drawString(String.format(Locale.US, "fuel=%.1ft / %.1ft (%s)", this.fuelLevel, CruiseControlApplication.maxFuel, CruiseControlApplication.myShip), 10, 210);
 		// system=Name ab-c d10
 		// known=9 | 1x ELW | 1x WW-TF | 2x HMC | 1x M | 4x Icy
 		// guessed=9 | 1x ELW | 1x WW-TF | 1x HMC-TF | 1x HMC | 1x M | 4x Icy
 		// scanned=1/9 | 1x ELW
-		g.drawString(String.format(Locale.US, "system=%s", this.currentSystemName), 10, 240);
+		g.drawString(String.format(Locale.US, "%s | Sol: %d Ly | Colonia: %d Ly", this.currentSystemName, (int) this.currentSystemCoord.distanceTo(new Coord(0, 0, 0)),
+				(int) this.currentSystemCoord.distanceTo(new Coord(-9530.5f, -910.28125f, 19808.125f))), 10, 240);
 		StringBuilder sbKnown = new StringBuilder("known=").append(this.currentSystemKnownBodies.size());
 		if (!this.currentSystemKnownBodies.isEmpty()) {
 			List<Body> bodiesSortedByValue = this.currentSystemKnownBodies.stream()
@@ -1746,6 +1748,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				this.shipControl.honkDelayed(2000);
 				this.honkingSince = System.currentTimeMillis() + 2000;
 				this.currentSystemName = fsdJumpEvent.getStarSystem();
+				this.currentSystemCoord = fsdJumpEvent.getStarPos();
 				this.currentSystemKnownBodies = this.universeService.findBodiesByStarSystemName(fsdJumpEvent.getStarSystem());
 				if (this.nextValuableSystem != null && fsdJumpEvent.getStarSystem().equals(this.nextValuableSystem.getName())) {
 					this.nextValuableSystem = null;
