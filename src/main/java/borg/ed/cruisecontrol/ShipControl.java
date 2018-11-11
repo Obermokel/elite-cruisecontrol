@@ -21,9 +21,11 @@ public class ShipControl {
 	static final Logger logger = LoggerFactory.getLogger(ShipControl.class);
 
 	public static final String SHIP_ANACONDA = "Anaconda";
+	public static final String SHIP_ASP_SCOUT = "Asp_Scout";
 	public static final String SHIP_ORCA = "Orca";
 	public static final String SHIP_TYPE9 = "Type9";
 
+	// Time for a 180° pitch in SUPERCRUISE!
 	public static final Map<String, Long> PITCH_180_MILLIS = new HashMap<>();
 
 	public static final Map<String, Float> PITCH_FACTOR = new HashMap<>();
@@ -32,17 +34,26 @@ public class ShipControl {
 
 	static {
 		PITCH_180_MILLIS.put(SHIP_ANACONDA, 24000L);
+		PITCH_180_MILLIS.put(SHIP_ASP_SCOUT, 10000L);
 		PITCH_180_MILLIS.put(SHIP_ORCA, 18000L);
 		PITCH_180_MILLIS.put(SHIP_TYPE9, 30000L);
 
+		// Anaconda
 		PITCH_FACTOR.put(SHIP_ANACONDA, 2.5f);
 		ROLL_FACTOR.put(SHIP_ANACONDA, 1.5f);
 		YAW_FACTOR.put(SHIP_ANACONDA, 4.5f);
 
+		// Asp Scout
+		PITCH_FACTOR.put(SHIP_ASP_SCOUT, 0.5f);
+		ROLL_FACTOR.put(SHIP_ASP_SCOUT, 0.5f);
+		YAW_FACTOR.put(SHIP_ASP_SCOUT, 0.5f);
+
+		// Orca
 		PITCH_FACTOR.put(SHIP_ORCA, 1.0f);
 		ROLL_FACTOR.put(SHIP_ORCA, 1.0f);
 		YAW_FACTOR.put(SHIP_ORCA, 1.0f);
 
+		// Type-9
 		PITCH_FACTOR.put(SHIP_TYPE9, 3.0f);
 		ROLL_FACTOR.put(SHIP_TYPE9, 4.0f);
 		YAW_FACTOR.put(SHIP_TYPE9, 4.5f);
