@@ -1922,7 +1922,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						for (Body b : valuableBodies) {
 							payout += BodyUtil.estimatePayout(b);
 						}
-						if (payout >= 500_000) {
+						if (payout >= 1_500_000) {
 							valuableSystems.add(new ValuableSystem(candidateSystemName, candidateSystemCoord, payout));
 						}
 					}
