@@ -9,6 +9,7 @@ import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -78,6 +79,7 @@ import borg.ed.universe.journal.events.ReceiveTextEvent;
 import borg.ed.universe.journal.events.ScanEvent;
 import borg.ed.universe.journal.events.StartJumpEvent;
 import borg.ed.universe.model.Body;
+import borg.ed.universe.model.StarSystem;
 import borg.ed.universe.service.UniverseService;
 import borg.ed.universe.util.BodyUtil;
 import borg.ed.universe.util.MiscUtil;
@@ -1903,6 +1905,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			for (String candidateSystemName : candidateSystems.keySet()) {
 				if (CruiseControlApplication.myVisitedSystems.contains(candidateSystemName)) {
 					continue;
+				} else if (candidateSystemName.contains("+") || candidateSystemName.contains("(") || candidateSystemName.contains(")")) {
+					continue;
 				}
 				Coord candidateSystemCoord = candidateSystems.get(candidateSystemName);
 				float distanceToCandidate = myCoord.distanceTo(candidateSystemCoord);
@@ -1912,21 +1916,26 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				float candidateDistanceToNextWaypoint = candidateSystemCoord.distanceTo(nextWaypointCoord);
 				float maxAllowedDistance = nextWaypointDistance - (distanceToCandidate / 2); // At least half of the way must be towards our next waypoint
 				if (candidateDistanceToNextWaypoint <= maxAllowedDistance) {
+					// Check scoopable
 					List<Body> bodies = this.universeService.findBodiesByStarSystemName(candidateSystemName);
 					List<Body> arrivalStars = bodies.stream().filter(b -> b.getStarClass() != null && (b.getDistanceToArrival() == null || b.getDistanceToArrival().floatValue() == 0.0f))
 							.collect(Collectors.toList());
 					boolean nonScoopableArrivalStar = arrivalStars.size() == 1 && !arrivalStars.get(0).getStarClass().isScoopable();
 					if (!nonScoopableArrivalStar) {
-						List<Body> valuableBodies = bodies.stream()
-								.filter(b -> b.getDistanceToArrival() != null && ((BodyUtil.estimatePayout(b) >= 200000 && b.getDistanceToArrival().intValue() < 23456)
-										|| (BodyUtil.estimatePayout(b) >= 500000 && b.getDistanceToArrival().intValue() < 56789)))
-								.collect(Collectors.toList());
-						long payout = 0;
-						for (Body b : valuableBodies) {
-							payout += BodyUtil.estimatePayout(b);
-						}
-						if (payout >= 1_500_000) {
-							valuableSystems.add(new ValuableSystem(candidateSystemName, candidateSystemCoord, payout));
+						// Check population
+						StarSystem starSystem = this.universeService.findStarSystemByName(candidateSystemName);
+						if (starSystem != null && starSystem.getPopulation().compareTo(BigDecimal.ZERO) <= 0) {
+							List<Body> valuableBodies = bodies.stream()
+									.filter(b -> b.getDistanceToArrival() != null && ((BodyUtil.estimatePayout(b) >= 200000 && b.getDistanceToArrival().intValue() < 23456)
+											|| (BodyUtil.estimatePayout(b) >= 500000 && b.getDistanceToArrival().intValue() < 56789)))
+									.collect(Collectors.toList());
+							long payout = 0;
+							for (Body b : valuableBodies) {
+								payout += BodyUtil.estimatePayout(b);
+							}
+							if (payout >= 1_500_000) {
+								valuableSystems.add(new ValuableSystem(candidateSystemName, candidateSystemCoord, payout));
+							}
 						}
 					}
 				}
