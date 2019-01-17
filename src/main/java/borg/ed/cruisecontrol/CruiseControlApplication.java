@@ -38,6 +38,7 @@ import borg.ed.universe.journal.events.AbstractJournalEvent;
 import borg.ed.universe.journal.events.DiedEvent;
 import borg.ed.universe.journal.events.FSDJumpEvent;
 import borg.ed.universe.journal.events.LoadGameEvent;
+import borg.ed.universe.journal.events.MultiSellExplorationDataEvent;
 import borg.ed.universe.journal.events.ScanEvent;
 import borg.ed.universe.journal.events.SellExplorationDataEvent;
 import borg.ed.universe.util.BodyUtil;
@@ -206,7 +207,7 @@ public class CruiseControlApplication {
 							explorationPayoutTotal += BodyUtil.estimatePayout((ScanEvent) event);
 							explorationPayout += BodyUtil.estimatePayout((ScanEvent) event);
 							countEventForPlaytime = true;
-						} else if (event instanceof SellExplorationDataEvent || event instanceof DiedEvent) {
+						} else if (event instanceof SellExplorationDataEvent || event instanceof MultiSellExplorationDataEvent || event instanceof DiedEvent) {
 							jumpsTotal -= jumps;
 							jumps = 0;
 							lightyearsTotal -= lightyears;
