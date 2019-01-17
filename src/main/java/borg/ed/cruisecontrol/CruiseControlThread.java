@@ -1877,7 +1877,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 					}
 				}
 			} else if (event instanceof ReceiveTextEvent) {
-				if ("npc".equalsIgnoreCase(((ReceiveTextEvent) event).getChannel())) {
+				if ("npc".equalsIgnoreCase(((ReceiveTextEvent) event).getChannel()) && ((ReceiveTextEvent) event).getMessage() != null
+						&& !((ReceiveTextEvent) event).getMessage().startsWith("$COMMS")) {
 					this.doEmergencyExit(REASON_COMBAT_LOG);
 					return;
 				}
