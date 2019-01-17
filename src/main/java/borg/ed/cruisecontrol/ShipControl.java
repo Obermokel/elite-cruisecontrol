@@ -22,6 +22,7 @@ public class ShipControl {
 
 	public static final String SHIP_ANACONDA = "Anaconda";
 	public static final String SHIP_ASP_SCOUT = "Asp_Scout";
+	public static final String SHIP_KRAIT_MK2 = "Krait_MkII";
 	public static final String SHIP_ORCA = "Orca";
 	public static final String SHIP_TYPE9 = "Type9";
 
@@ -35,6 +36,7 @@ public class ShipControl {
 	static {
 		PITCH_180_MILLIS.put(SHIP_ANACONDA, 24000L);
 		PITCH_180_MILLIS.put(SHIP_ASP_SCOUT, 10000L);
+		PITCH_180_MILLIS.put(SHIP_KRAIT_MK2, 16000L);
 		PITCH_180_MILLIS.put(SHIP_ORCA, 18000L);
 		PITCH_180_MILLIS.put(SHIP_TYPE9, 30000L);
 
@@ -47,6 +49,11 @@ public class ShipControl {
 		PITCH_FACTOR.put(SHIP_ASP_SCOUT, 0.4f);
 		ROLL_FACTOR.put(SHIP_ASP_SCOUT, 0.5f);
 		YAW_FACTOR.put(SHIP_ASP_SCOUT, 0.5f);
+
+		// Krait MkII
+		PITCH_FACTOR.put(SHIP_KRAIT_MK2, 2.0f);
+		ROLL_FACTOR.put(SHIP_KRAIT_MK2, 0.8f);
+		YAW_FACTOR.put(SHIP_KRAIT_MK2, 2.5f);
 
 		// Orca
 		PITCH_FACTOR.put(SHIP_ORCA, 1.0f);
@@ -79,10 +86,12 @@ public class ShipControl {
 
 	public ShipControl() {
 		GraphicsDevice primaryScreen = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
-		this.screenRect = new Rectangle(primaryScreen.getDisplayMode().getWidth(), primaryScreen.getDisplayMode().getHeight());
+		this.screenRect = new Rectangle(primaryScreen.getDisplayMode().getWidth(),
+				primaryScreen.getDisplayMode().getHeight());
 		logger.debug("Primary screen resolution is " + this.screenRect.width + "x" + this.screenRect.height);
 
-		this.mouseUtil = new MouseUtil(screenRect.width, screenRect.height, CruiseControlApplication.SCALED_WIDTH, CruiseControlApplication.SCALED_HEIGHT);
+		this.mouseUtil = new MouseUtil(screenRect.width, screenRect.height, CruiseControlApplication.SCALED_WIDTH,
+				CruiseControlApplication.SCALED_HEIGHT);
 	}
 
 	public long getPitch180TimeMillis() {
@@ -165,7 +174,8 @@ public class ShipControl {
 			this.pitchDown = 0;
 			this.pressKeyPercentOfTime(0, KeyEvent.VK_X);
 
-			this.pitchUp = Math.min(100, Math.max(0, Math.round(PITCH_FACTOR.getOrDefault(CruiseControlApplication.myShip, 1.0f) * percent)));
+			this.pitchUp = Math.min(100, Math.max(0,
+					Math.round(PITCH_FACTOR.getOrDefault(CruiseControlApplication.myShip, 1.0f) * percent)));
 			this.pressKeyPercentOfTime(this.pitchUp, KeyEvent.VK_W);
 		}
 	}
@@ -181,7 +191,8 @@ public class ShipControl {
 			this.pitchUp = 0;
 			this.pressKeyPercentOfTime(0, KeyEvent.VK_W);
 
-			this.pitchDown = Math.min(100, Math.max(0, Math.round(PITCH_FACTOR.getOrDefault(CruiseControlApplication.myShip, 1.0f) * percent)));
+			this.pitchDown = Math.min(100, Math.max(0,
+					Math.round(PITCH_FACTOR.getOrDefault(CruiseControlApplication.myShip, 1.0f) * percent)));
 			this.pressKeyPercentOfTime(this.pitchDown, KeyEvent.VK_X);
 		}
 	}
@@ -197,7 +208,8 @@ public class ShipControl {
 			this.rollLeft = 0;
 			this.pressKeyPercentOfTime(0, KeyEvent.VK_Q);
 
-			this.rollRight = Math.min(100, Math.max(0, Math.round(ROLL_FACTOR.getOrDefault(CruiseControlApplication.myShip, 1.0f) * percent)));
+			this.rollRight = Math.min(100,
+					Math.max(0, Math.round(ROLL_FACTOR.getOrDefault(CruiseControlApplication.myShip, 1.0f) * percent)));
 			this.pressKeyPercentOfTime(this.rollRight, KeyEvent.VK_E);
 		}
 	}
@@ -213,7 +225,8 @@ public class ShipControl {
 			this.rollRight = 0;
 			this.pressKeyPercentOfTime(0, KeyEvent.VK_E);
 
-			this.rollLeft = Math.min(100, Math.max(0, Math.round(ROLL_FACTOR.getOrDefault(CruiseControlApplication.myShip, 1.0f) * percent)));
+			this.rollLeft = Math.min(100,
+					Math.max(0, Math.round(ROLL_FACTOR.getOrDefault(CruiseControlApplication.myShip, 1.0f) * percent)));
 			this.pressKeyPercentOfTime(this.rollLeft, KeyEvent.VK_Q);
 		}
 	}
@@ -229,7 +242,8 @@ public class ShipControl {
 			this.yawLeft = 0;
 			this.pressKeyPercentOfTime(0, KeyEvent.VK_A);
 
-			this.yawRight = Math.min(100, Math.max(0, Math.round(YAW_FACTOR.getOrDefault(CruiseControlApplication.myShip, 1.0f) * percent)));
+			this.yawRight = Math.min(100,
+					Math.max(0, Math.round(YAW_FACTOR.getOrDefault(CruiseControlApplication.myShip, 1.0f) * percent)));
 			this.pressKeyPercentOfTime(this.yawRight, KeyEvent.VK_D);
 		}
 	}
@@ -245,7 +259,8 @@ public class ShipControl {
 			this.yawRight = 0;
 			this.pressKeyPercentOfTime(0, KeyEvent.VK_D);
 
-			this.yawLeft = Math.min(100, Math.max(0, Math.round(YAW_FACTOR.getOrDefault(CruiseControlApplication.myShip, 1.0f) * percent)));
+			this.yawLeft = Math.min(100,
+					Math.max(0, Math.round(YAW_FACTOR.getOrDefault(CruiseControlApplication.myShip, 1.0f) * percent)));
 			this.pressKeyPercentOfTime(this.yawLeft, KeyEvent.VK_A);
 		}
 	}
@@ -515,11 +530,11 @@ public class ShipControl {
 			int lastPercent = 0;
 			while (this.percent > 0 && this.percent <= 100) {
 				try {
-					//					if (lastPercent == 100 && this.percent == 100) {
+					// if (lastPercent == 100 && this.percent == 100) {
 					lastPercent = this.percent;
 					this.robot.keyPress(this.keyCode);
 					Thread.sleep(this.percent * 2);
-					//					}
+					// }
 
 					if (this.percent < 100) {
 						this.robot.keyRelease(this.keyCode);
