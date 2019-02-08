@@ -8,9 +8,9 @@ import java.util.List;
 import boofcv.struct.image.GrayF32;
 import boofcv.struct.image.Planar;
 import borg.ed.cruisecontrol.templatematching.TemplateMatchRgb;
-import borg.ed.universe.constants.PlanetClass;
-import borg.ed.universe.constants.StarClass;
-import borg.ed.universe.util.BodyUtil;
+import borg.ed.galaxy.constants.PlanetClass;
+import borg.ed.galaxy.constants.StarClass;
+import borg.ed.galaxy.util.BodyUtil;
 
 public class SysmapBody {
 

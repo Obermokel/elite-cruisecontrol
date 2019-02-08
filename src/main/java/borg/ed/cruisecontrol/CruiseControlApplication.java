@@ -30,21 +30,21 @@ import org.springframework.context.annotation.Import;
 
 import borg.ed.cruisecontrol.gui.CruiseControlFrame;
 import borg.ed.cruisecontrol.sysmap.SysmapScanner;
-import borg.ed.universe.UniverseApplication;
-import borg.ed.universe.journal.JournalEventReader;
-import borg.ed.universe.journal.JournalReaderThread;
-import borg.ed.universe.journal.StatusReaderThread;
-import borg.ed.universe.journal.events.AbstractJournalEvent;
-import borg.ed.universe.journal.events.DiedEvent;
-import borg.ed.universe.journal.events.FSDJumpEvent;
-import borg.ed.universe.journal.events.LoadGameEvent;
-import borg.ed.universe.journal.events.MultiSellExplorationDataEvent;
-import borg.ed.universe.journal.events.ScanEvent;
-import borg.ed.universe.journal.events.SellExplorationDataEvent;
-import borg.ed.universe.util.BodyUtil;
+import borg.ed.galaxy.GalaxyApplication;
+import borg.ed.galaxy.journal.JournalEventReader;
+import borg.ed.galaxy.journal.JournalReaderThread;
+import borg.ed.galaxy.journal.StatusReaderThread;
+import borg.ed.galaxy.journal.events.AbstractJournalEvent;
+import borg.ed.galaxy.journal.events.DiedEvent;
+import borg.ed.galaxy.journal.events.FSDJumpEvent;
+import borg.ed.galaxy.journal.events.LoadGameEvent;
+import borg.ed.galaxy.journal.events.MultiSellExplorationDataEvent;
+import borg.ed.galaxy.journal.events.ScanEvent;
+import borg.ed.galaxy.journal.events.SellExplorationDataEvent;
+import borg.ed.galaxy.util.BodyUtil;
 
 @Configuration
-@Import(UniverseApplication.class)
+@Import(GalaxyApplication.class)
 public class CruiseControlApplication {
 
 	static final Logger logger = LoggerFactory.getLogger(CruiseControlApplication.class);

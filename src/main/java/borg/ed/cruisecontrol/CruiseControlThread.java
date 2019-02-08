@@ -63,26 +63,26 @@ import borg.ed.cruisecontrol.templatematching.Template;
 import borg.ed.cruisecontrol.templatematching.TemplateMatch;
 import borg.ed.cruisecontrol.templatematching.TemplateMatcher;
 import borg.ed.cruisecontrol.util.ImageUtil;
-import borg.ed.universe.constants.PlanetClass;
-import borg.ed.universe.constants.StarClass;
-import borg.ed.universe.data.Coord;
-import borg.ed.universe.journal.JournalReaderThread;
-import borg.ed.universe.journal.JournalUpdateListener;
-import borg.ed.universe.journal.Status;
-import borg.ed.universe.journal.StatusReaderThread;
-import borg.ed.universe.journal.StatusUpdateListener;
-import borg.ed.universe.journal.events.AbstractJournalEvent;
-import borg.ed.universe.journal.events.DiscoveryScanEvent;
-import borg.ed.universe.journal.events.FSDJumpEvent;
-import borg.ed.universe.journal.events.FuelScoopEvent;
-import borg.ed.universe.journal.events.ReceiveTextEvent;
-import borg.ed.universe.journal.events.ScanEvent;
-import borg.ed.universe.journal.events.StartJumpEvent;
-import borg.ed.universe.model.Body;
-import borg.ed.universe.model.StarSystem;
-import borg.ed.universe.service.UniverseService;
-import borg.ed.universe.util.BodyUtil;
-import borg.ed.universe.util.MiscUtil;
+import borg.ed.galaxy.constants.PlanetClass;
+import borg.ed.galaxy.constants.StarClass;
+import borg.ed.galaxy.data.Coord;
+import borg.ed.galaxy.journal.JournalReaderThread;
+import borg.ed.galaxy.journal.JournalUpdateListener;
+import borg.ed.galaxy.journal.Status;
+import borg.ed.galaxy.journal.StatusReaderThread;
+import borg.ed.galaxy.journal.StatusUpdateListener;
+import borg.ed.galaxy.journal.events.AbstractJournalEvent;
+import borg.ed.galaxy.journal.events.DiscoveryScanEvent;
+import borg.ed.galaxy.journal.events.FSDJumpEvent;
+import borg.ed.galaxy.journal.events.FuelScoopEvent;
+import borg.ed.galaxy.journal.events.ReceiveTextEvent;
+import borg.ed.galaxy.journal.events.ScanEvent;
+import borg.ed.galaxy.journal.events.StartJumpEvent;
+import borg.ed.galaxy.model.Body;
+import borg.ed.galaxy.model.StarSystem;
+import borg.ed.galaxy.service.GalaxyService;
+import borg.ed.galaxy.util.BodyUtil;
+import borg.ed.galaxy.util.MiscUtil;
 import georegression.struct.point.Point2D_F64;
 
 public class CruiseControlThread extends Thread implements JournalUpdateListener, StatusUpdateListener {
@@ -93,7 +93,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private static final String REASON_COMBAT_LOG = "Combat log";
 
 	@Autowired
-	private UniverseService universeService;
+	private GalaxyService galaxyService;
 	@Autowired
 	private ScreenConverterThread screenConverterThread;
 	@Autowired
@@ -1751,7 +1751,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				this.honkingSince = System.currentTimeMillis() + 2000;
 				this.currentSystemName = fsdJumpEvent.getStarSystem();
 				this.currentSystemCoord = fsdJumpEvent.getStarPos();
-				this.currentSystemKnownBodies = this.universeService.findBodiesByStarSystemName(fsdJumpEvent.getStarSystem());
+				this.currentSystemKnownBodies = this.galaxyService.findBodiesByStarSystemName(fsdJumpEvent.getStarSystem());
 				if (this.nextValuableSystem != null && fsdJumpEvent.getStarSystem().equals(this.nextValuableSystem.getName())) {
 					this.nextValuableSystem = null;
 				}
@@ -1893,11 +1893,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private List<ValuableSystem> lookForValuableSystems(final Coord myCoord, int rangeLy, String nextWaypoint) {
 		try {
 			logger.debug("Searching for valuable systems within " + rangeLy + " Ly around " + myCoord + " on the way to " + nextWaypoint);
-			final Coord nextWaypointCoord = this.universeService.findStarSystemByName(nextWaypoint).getCoord();
+			final Coord nextWaypointCoord = this.galaxyService.findStarSystemByName(nextWaypoint).getCoord();
 			final float nextWaypointDistance = myCoord.distanceTo(nextWaypointCoord);
 
 			Map<String, Coord> candidateSystems = new HashMap<>();
-			Page<Body> page = this.universeService.findPlanetsNear(myCoord, rangeLy, null, Arrays.asList(PlanetClass.EARTHLIKE_BODY, PlanetClass.AMMONIA_WORLD, PlanetClass.WATER_WORLD),
+			Page<Body> page = this.galaxyService.findPlanetsNear(myCoord, rangeLy, null, Arrays.asList(PlanetClass.EARTHLIKE_BODY, PlanetClass.AMMONIA_WORLD, PlanetClass.WATER_WORLD),
 					PageRequest.of(0, 10000));
 			page.getContent().stream().forEach(b -> candidateSystems.put(b.getStarSystemName(), b.getCoord()));
 			logger.debug("Found " + candidateSystems.size() + " candidate system(s)");
@@ -1918,13 +1918,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				float maxAllowedDistance = nextWaypointDistance - (distanceToCandidate / 2); // At least half of the way must be towards our next waypoint
 				if (candidateDistanceToNextWaypoint <= maxAllowedDistance) {
 					// Check scoopable
-					List<Body> bodies = this.universeService.findBodiesByStarSystemName(candidateSystemName);
+					List<Body> bodies = this.galaxyService.findBodiesByStarSystemName(candidateSystemName);
 					List<Body> arrivalStars = bodies.stream().filter(b -> b.getStarClass() != null && (b.getDistanceToArrivalLs() == null || b.getDistanceToArrivalLs().floatValue() == 0.0f))
 							.collect(Collectors.toList());
 					boolean nonScoopableArrivalStar = arrivalStars.size() == 1 && !arrivalStars.get(0).getStarClass().isScoopable();
 					if (!nonScoopableArrivalStar) {
 						// Check population
-						StarSystem starSystem = this.universeService.findStarSystemByName(candidateSystemName);
+						StarSystem starSystem = this.galaxyService.findStarSystemByName(candidateSystemName);
 						if (starSystem != null && starSystem.getPopulation().compareTo(BigDecimal.ZERO) <= 0) {
 							List<Body> valuableBodies = bodies.stream()
 									.filter(b -> b.getDistanceToArrivalLs() != null && ((BodyUtil.estimatePayout(b) >= 200000 && b.getDistanceToArrivalLs().intValue() < 23456)

@@ -13,7 +13,7 @@
 	<dependencies>
         <dependency>
             <groupId>borg</groupId>
-            <artifactId>elite-universe</artifactId>
+            <artifactId>elite-galaxy</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
 		<dependency>

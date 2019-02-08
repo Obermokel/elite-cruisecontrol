@@ -18,12 +18,12 @@ import javax.swing.SwingConstants;
 
 import boofcv.struct.image.GrayF32;
 import borg.ed.cruisecontrol.DebugImageListener;
-import borg.ed.universe.journal.JournalUpdateListener;
-import borg.ed.universe.journal.Status;
-import borg.ed.universe.journal.StatusUpdateListener;
-import borg.ed.universe.journal.events.AbstractJournalEvent;
-import borg.ed.universe.journal.events.ReceiveTextEvent;
-import borg.ed.universe.journal.events.SendTextEvent;
+import borg.ed.galaxy.journal.JournalUpdateListener;
+import borg.ed.galaxy.journal.Status;
+import borg.ed.galaxy.journal.StatusUpdateListener;
+import borg.ed.galaxy.journal.events.AbstractJournalEvent;
+import borg.ed.galaxy.journal.events.ReceiveTextEvent;
+import borg.ed.galaxy.journal.events.SendTextEvent;
 
 public class CruiseControlFrame extends JFrame implements WindowListener, KeyListener, DebugImageListener, JournalUpdateListener, StatusUpdateListener {
 

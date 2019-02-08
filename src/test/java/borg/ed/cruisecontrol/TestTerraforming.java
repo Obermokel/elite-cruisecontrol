@@ -15,14 +15,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.util.CloseableIterator;
 
-import borg.ed.universe.UniverseApplication;
-import borg.ed.universe.constants.PlanetClass;
-import borg.ed.universe.data.Coord;
-import borg.ed.universe.model.Body;
-import borg.ed.universe.service.UniverseService;
+import borg.ed.galaxy.GalaxyApplication;
+import borg.ed.galaxy.constants.PlanetClass;
+import borg.ed.galaxy.data.Coord;
+import borg.ed.galaxy.model.Body;
+import borg.ed.galaxy.service.GalaxyService;
 
 @Configuration
-@Import(UniverseApplication.class)
+@Import(GalaxyApplication.class)
 public class TestTerraforming {
 
 	static final Logger logger = LoggerFactory.getLogger(TestTerraforming.class);
@@ -50,14 +50,14 @@ public class TestTerraforming {
 
 		//		System.out.println("expectedGravityG=" + expectedGravityG);
 
-		UniverseService universeService = APPCTX.getBean(UniverseService.class);
+		GalaxyService galaxyService = APPCTX.getBean(GalaxyService.class);
 
 		List<BigDecimal> sortedDistanceToArrivalLs = new ArrayList<>();
 		List<BigDecimal> sortedSemiMajorAxisAu = new ArrayList<>();
 		List<BigDecimal> sortedEarthMasses = new ArrayList<>();
 		List<BigDecimal> sortedRadiusKm = new ArrayList<>();
 		List<BigDecimal> sortedGravityG = new ArrayList<>();
-		try (CloseableIterator<Body> it = universeService.streamPlanetsNear(new Coord(), 10000, true, Arrays.asList(PlanetClass.WATER_WORLD))) {
+		try (CloseableIterator<Body> it = galaxyService.streamPlanetsNear(new Coord(), 10000, true, Arrays.asList(PlanetClass.WATER_WORLD))) {
 			while (it.hasNext()) {
 				Body b = it.next();
 				try {

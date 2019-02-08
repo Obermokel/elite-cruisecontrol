@@ -56,8 +56,8 @@ import borg.ed.cruisecontrol.templatematching.TemplateMatcher;
 import borg.ed.cruisecontrol.templatematching.TemplateRgb;
 import borg.ed.cruisecontrol.util.ImageUtil;
 import borg.ed.cruisecontrol.util.MouseUtil;
-import borg.ed.universe.constants.PlanetClass;
-import borg.ed.universe.constants.StarClass;
+import borg.ed.galaxy.constants.PlanetClass;
+import borg.ed.galaxy.constants.StarClass;
 import georegression.struct.shapes.EllipseRotated_F64;
 
 public class SysmapScanner {
