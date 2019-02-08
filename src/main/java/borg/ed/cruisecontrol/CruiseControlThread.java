@@ -1919,7 +1919,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				if (candidateDistanceToNextWaypoint <= maxAllowedDistance) {
 					// Check scoopable
 					List<Body> bodies = this.universeService.findBodiesByStarSystemName(candidateSystemName);
-					List<Body> arrivalStars = bodies.stream().filter(b -> b.getStarClass() != null && (b.getDistanceToArrival() == null || b.getDistanceToArrival().floatValue() == 0.0f))
+					List<Body> arrivalStars = bodies.stream().filter(b -> b.getStarClass() != null && (b.getDistanceToArrivalLs() == null || b.getDistanceToArrivalLs().floatValue() == 0.0f))
 							.collect(Collectors.toList());
 					boolean nonScoopableArrivalStar = arrivalStars.size() == 1 && !arrivalStars.get(0).getStarClass().isScoopable();
 					if (!nonScoopableArrivalStar) {
@@ -1927,8 +1927,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 						StarSystem starSystem = this.universeService.findStarSystemByName(candidateSystemName);
 						if (starSystem != null && starSystem.getPopulation().compareTo(BigDecimal.ZERO) <= 0) {
 							List<Body> valuableBodies = bodies.stream()
-									.filter(b -> b.getDistanceToArrival() != null && ((BodyUtil.estimatePayout(b) >= 200000 && b.getDistanceToArrival().intValue() < 23456)
-											|| (BodyUtil.estimatePayout(b) >= 500000 && b.getDistanceToArrival().intValue() < 56789)))
+									.filter(b -> b.getDistanceToArrivalLs() != null && ((BodyUtil.estimatePayout(b) >= 200000 && b.getDistanceToArrivalLs().intValue() < 23456)
+											|| (BodyUtil.estimatePayout(b) >= 500000 && b.getDistanceToArrivalLs().intValue() < 56789)))
 									.collect(Collectors.toList());
 							long payout = 0;
 							for (Body b : valuableBodies) {

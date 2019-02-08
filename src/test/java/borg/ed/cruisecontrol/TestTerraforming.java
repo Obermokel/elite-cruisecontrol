@@ -61,14 +61,14 @@ public class TestTerraforming {
 			while (it.hasNext()) {
 				Body b = it.next();
 				try {
-					BigDecimal distanceToArrivalLs = b.getDistanceToArrival();
+					BigDecimal distanceToArrivalLs = b.getDistanceToArrivalLs();
 					BigDecimal semiMajorAxisAu = b.getSemiMajorAxis();
 					BigDecimal earthMasses = b.getEarthMasses();
-					BigDecimal radiusKm = b.getRadius();
+					BigDecimal radiusKm = b.getRadiusKm();
 					if (radiusKm.intValue() > 100_000) {
 						radiusKm = radiusKm.divide(new BigDecimal(1000), 0, BigDecimal.ROUND_HALF_UP);
 					}
-					BigDecimal gravityG = b.getGravity();
+					BigDecimal gravityG = b.getGravityG();
 					if (gravityG.intValue() > 8) {
 						gravityG = gravityG.divide(EARTH_GRAVITY_M_S2, 2, BigDecimal.ROUND_HALF_UP);
 					}
