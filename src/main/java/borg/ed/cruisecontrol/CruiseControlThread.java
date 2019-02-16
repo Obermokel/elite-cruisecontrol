@@ -80,6 +80,7 @@ import borg.ed.galaxy.journal.events.ScanEvent;
 import borg.ed.galaxy.journal.events.StartJumpEvent;
 import borg.ed.galaxy.model.Body;
 import borg.ed.galaxy.model.StarSystem;
+import borg.ed.galaxy.robot.ShipControl;
 import borg.ed.galaxy.service.GalaxyService;
 import borg.ed.galaxy.util.BodyUtil;
 import borg.ed.galaxy.util.MiscUtil;

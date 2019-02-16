@@ -1,8 +1,6 @@
 package borg.ed.cruisecontrol;
 
 import java.awt.AWTException;
-import java.awt.GraphicsEnvironment;
-import java.awt.Robot;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileFilter;
@@ -41,6 +39,7 @@ import borg.ed.galaxy.journal.events.LoadGameEvent;
 import borg.ed.galaxy.journal.events.MultiSellExplorationDataEvent;
 import borg.ed.galaxy.journal.events.ScanEvent;
 import borg.ed.galaxy.journal.events.SellExplorationDataEvent;
+import borg.ed.galaxy.robot.ShipControl;
 import borg.ed.galaxy.util.BodyUtil;
 
 @Configuration
@@ -88,6 +87,7 @@ public class CruiseControlApplication {
 		// Know who we are
 		File[] sortedJournalFiles = getSortedJournalFiles();
 		setCommanderData(sortedJournalFiles[sortedJournalFiles.length - 1]);
+		APPCTX.getBean(ShipControl.class).setMyShip(myShip);
 
 		// Compute totals for statistics display (may take a while with hundreds of journal files, so do it in a thread)
 		new Thread(new Runnable() {
@@ -231,20 +231,6 @@ public class CruiseControlApplication {
 		} catch (Exception e) {
 			logger.error("Failed to compute totals", e);
 		}
-	}
-
-	@Bean
-	public Robot robot() {
-		try {
-			return new Robot(GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice());
-		} catch (AWTException e) {
-			throw new RuntimeException("Failed to obtain a robot", e);
-		}
-	}
-
-	@Bean
-	public ShipControl shipControl() {
-		return new ShipControl();
 	}
 
 	@Bean
