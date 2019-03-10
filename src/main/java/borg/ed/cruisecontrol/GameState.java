@@ -42,6 +42,8 @@ public enum GameState {
 	 */
 	ESCAPE_FROM_STAR_SLOW,
 
+	ESCAPE_FROM_STAR_PER_BODY,
+
 	/**
 	 * At 75% throttle escape for 10 seconds, again turning the nose down if there is too much brightness ahead.
 	 */

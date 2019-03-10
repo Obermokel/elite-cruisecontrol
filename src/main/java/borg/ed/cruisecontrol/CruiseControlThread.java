@@ -74,6 +74,7 @@ import borg.ed.galaxy.journal.StatusUpdateListener;
 import borg.ed.galaxy.journal.events.AbstractJournalEvent;
 import borg.ed.galaxy.journal.events.DiscoveryScanEvent;
 import borg.ed.galaxy.journal.events.FSDJumpEvent;
+import borg.ed.galaxy.journal.events.FSSDiscoveryScanEvent;
 import borg.ed.galaxy.journal.events.FuelScoopEvent;
 import borg.ed.galaxy.journal.events.ReceiveTextEvent;
 import borg.ed.galaxy.journal.events.ScanEvent;
@@ -263,7 +264,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		compassMatch = null;
 		//targetMatch = null;
 		if (gameState == GameState.UNKNOWN || gameState == GameState.ALIGN_TO_NEXT_SYSTEM || gameState == GameState.FSD_CHARGING || gameState == GameState.ALIGN_TO_NEXT_BODY
-				|| gameState == GameState.APPROACH_NEXT_BODY) {
+				|| gameState == GameState.APPROACH_NEXT_BODY || gameState == GameState.ESCAPE_FROM_STAR_PER_BODY) {
 			final GrayF32 myYellowHudImage = yellowHudImage;
 			Future<Point> futureTarget = threadPool.submit(new Callable<Point>() {
 				@Override
@@ -497,6 +498,31 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				}
 			}
 			if (System.currentTimeMillis() - this.escapingFromStarSince > 10000) {
+				this.escapingFromStarSince = System.currentTimeMillis();
+				this.gameState = GameState.ESCAPE_FROM_STAR_PER_BODY;
+				logger.debug("Fast escape done, now doing slow escape per body");
+			}
+			break;
+		case ESCAPE_FROM_STAR_PER_BODY:
+			if (this.shipControl.getThrottle() != 25) {
+				this.shipControl.setThrottle(25);
+			}
+			if (this.brightnessAhead > 0.15f) {
+				this.shipControl.setPitchDown(100);
+				if (this.brightnessAheadLeft > this.brightnessAheadRight) {
+					this.shipControl.setRollLeft((int) (10 * Math.random()));
+				} else {
+					this.shipControl.setRollRight((int) (10 * Math.random()));
+				}
+			} else {
+				if (targetPercentX != null && targetPercentY != null) {
+					this.alignToTargetInHud();
+				} else {
+					this.alignToTargetInCompass(compassMatch, compassDotMatch);
+				}
+			}
+			if (System.currentTimeMillis() - this.escapingFromStarSince > this.currentSystemNumDiscoveredBodies * 1000L
+					* MiscUtil.getAsLong(this.cruiseSettings.getEscapeFromStarPerBodySeconds(), 0L)) {
 				this.escapingFromStarSince = Long.MAX_VALUE;
 				this.shipControl.stopTurning();
 				if (this.currentSystemNumDiscoveredBodies > 1 && !this.cruiseSettings.isJonkMode()) {
@@ -1797,6 +1823,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				this.fuelLevel = ((FuelScoopEvent) event).getTotal().floatValue();
 			} else if (event instanceof DiscoveryScanEvent) {
 				this.currentSystemNumDiscoveredBodies += MiscUtil.getAsInt(((DiscoveryScanEvent) event).getBodies(), 0);
+			} else if (event instanceof FSSDiscoveryScanEvent) {
+				this.currentSystemNumDiscoveredBodies = MiscUtil.getAsInt(((FSSDiscoveryScanEvent) event).getBodyCount(), 0);
 			} else if (event instanceof ScanEvent) {
 				ScanEvent scanEvent = (ScanEvent) event;
 				this.shipControl.stopTurning();

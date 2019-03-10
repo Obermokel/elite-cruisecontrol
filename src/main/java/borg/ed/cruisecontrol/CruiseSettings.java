@@ -20,6 +20,7 @@ public class CruiseSettings {
 
 	private boolean jonkMode = false;
 	private boolean creditsMode = false;
+	private Long escapeFromStarPerBodySeconds = 0L;
 	private List<String> waypoints = new ArrayList<>();
 
 	public static CruiseSettings load() throws IOException {
@@ -59,6 +60,14 @@ public class CruiseSettings {
 
 	public void setCreditsMode(boolean creditsMode) {
 		this.creditsMode = creditsMode;
+	}
+
+	public Long getEscapeFromStarPerBodySeconds() {
+		return escapeFromStarPerBodySeconds;
+	}
+
+	public void setEscapeFromStarPerBodySeconds(Long escapeFromStarPerBodySeconds) {
+		this.escapeFromStarPerBodySeconds = escapeFromStarPerBodySeconds;
 	}
 
 	public List<String> getWaypoints() {
