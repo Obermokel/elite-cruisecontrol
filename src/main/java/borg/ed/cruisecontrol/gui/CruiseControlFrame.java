@@ -130,6 +130,9 @@ public class CruiseControlFrame extends JFrame implements WindowListener, KeyLis
 	@Override
 	public void onNewJournalEntry(AbstractJournalEvent event) {
 		if (event instanceof ReceiveTextEvent || event instanceof SendTextEvent) {
+			if (event instanceof ReceiveTextEvent && ((ReceiveTextEvent) event).getMessage().startsWith("$COMMS")) {
+				return;
+			}
 			synchronized (this.lastChatMessages) {
 				this.lastChatMessages.addFirst(event.toString());
 				while (this.lastChatMessages.size() > 10) {
