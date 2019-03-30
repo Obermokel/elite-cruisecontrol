@@ -62,6 +62,11 @@ public enum GameState {
 	WAIT_FOR_SHIP_HUD,
 
 	/**
+	 * Dummy state for debugging FSS
+	 */
+	DEBUG_FSS,
+
+	/**
 	 * At 100% throttle align to the next system.
 	 */
 	ALIGN_TO_NEXT_SYSTEM;

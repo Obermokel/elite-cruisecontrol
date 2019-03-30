@@ -55,6 +55,8 @@ import boofcv.struct.feature.AssociatedIndex;
 import boofcv.struct.feature.BrightFeature;
 import boofcv.struct.image.GrayF32;
 import boofcv.struct.image.Planar;
+import borg.ed.cruisecontrol.fss.FssBodyLocator;
+import borg.ed.cruisecontrol.fss.FssSpectrumBar;
 import borg.ed.cruisecontrol.sysmap.SensibleScanOrderComparator;
 import borg.ed.cruisecontrol.sysmap.SysmapBody;
 import borg.ed.cruisecontrol.sysmap.SysmapScanner;
@@ -150,6 +152,8 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 	private int lastValuableSystemsRadiusLy = 500;
 	private List<ValuableSystem> valuableSystems = new ArrayList<>();
 	private ValuableSystem nextValuableSystem = null;
+	private FssSpectrumBar fssSpectrumBar = new FssSpectrumBar();
+	private FssBodyLocator fssBodyLocator = new FssBodyLocator();
 	private long lastTick = System.currentTimeMillis();
 
 	private static final int COMPASS_REGION_X = 610;
@@ -242,8 +246,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 
 				// >>>> DEBUG IMAGE >>>>
 				if (CruiseControlApplication.SHOW_LIVE_DEBUG_IMAGE) {
-					this.drawColoredDebugImage(debugImage, orangeHudImage, yellowHudImage, blueWhiteHudImage, redHudImage, brightImage);
-					this.drawDebugInfoOnImage(debugImage, compassDotMatch);
+					if (gameState == GameState.DEBUG_FSS) {
+						this.drawFssDebugImage(debugImage, this.fssSpectrumBar, this.fssBodyLocator);
+						this.drawFssDebugInfo(debugImage);
+					} else {
+						this.drawColoredDebugImage(debugImage, orangeHudImage, yellowHudImage, blueWhiteHudImage, redHudImage, brightImage);
+						this.drawDebugInfoOnImage(debugImage, compassDotMatch);
+					}
 					for (DebugImageListener listener : this.debugImageListeners) {
 						listener.onNewDebugImage(debugImage, orangeHudImage, yellowHudImage, blueWhiteHudImage, redHudImage, brightImage);
 					}
@@ -370,6 +379,10 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		switch (this.gameState) {
 		case UNKNOWN:
 			this.shipControl.releaseAllKeys();
+			break;
+		case DEBUG_FSS:
+			this.fssSpectrumBar.refresh(rgb, hsv);
+			this.fssBodyLocator.refresh(rgb, hsv);
 			break;
 		case FSD_CHARGING:
 			if (this.brightnessAhead > 0.15f) {
@@ -1479,6 +1492,78 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		}
 	}
 
+	private void drawFssDebugImage(BufferedImage debugImage, FssSpectrumBar fssSpectrumBar, FssBodyLocator fssBodyLocator) {
+		BufferedImage spectrumBarDebugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(fssSpectrumBar.getDebugSubimage()), null, true);
+
+		Graphics2D g = debugImage.createGraphics();
+		g.setColor(Color.BLACK);
+		g.fillRect(0, 0, 1920, 1080);
+		g.drawImage(spectrumBarDebugImage, FssSpectrumBar.X_OFFSET, FssSpectrumBar.Y_OFFSET, null);
+		g.dispose();
+	}
+
+	private void drawFssDebugInfo(BufferedImage debugImage) {
+		Graphics2D g = debugImage.createGraphics();
+
+		long millis = System.currentTimeMillis() - this.lastTick;
+		double fps = 1000.0 / Math.max(1, millis);
+		g.setColor(new Color(170, 170, 250));
+		g.setFont(new Font("Sans Serif", Font.BOLD, 20));
+		g.drawString(String.format(Locale.US, "%.2f FPS / %s", fps, this.gameState), 10, 30);
+
+		// system=Name ab-c d10
+		// known=9 | 1x ELW | 1x WW-TF | 2x HMC | 1x M | 4x Icy
+		// guessed=9 | 1x ELW | 1x WW-TF | 1x HMC-TF | 1x HMC | 1x M | 4x Icy
+		// scanned=1/9 | 1x ELW
+		g.drawString(String.format(Locale.US, "%s | Sol: %d Ly | Colonia: %d Ly", this.currentSystemName, (int) this.currentSystemCoord.distanceTo(new Coord(0, 0, 0)),
+				(int) this.currentSystemCoord.distanceTo(new Coord(-9530.5f, -910.28125f, 19808.125f))), 10, 240);
+		StringBuilder sbKnown = new StringBuilder("known=").append(this.currentSystemKnownBodies.size());
+		if (!this.currentSystemKnownBodies.isEmpty()) {
+			List<Body> bodiesSortedByValue = this.currentSystemKnownBodies.stream()
+					.sorted((b1, b2) -> -1 * new Long(BodyUtil.estimatePayout(b1)).compareTo(new Long(BodyUtil.estimatePayout(b2)))).collect(Collectors.toList());
+			LinkedHashMap<String, Integer> countByType = new LinkedHashMap<>();
+			for (Body b : bodiesSortedByValue) {
+				String abbrType = BodyUtil.getAbbreviatedType(b);
+				countByType.put(abbrType, countByType.getOrDefault(abbrType, 0) + 1);
+			}
+			for (String abbrType : countByType.keySet()) {
+				sbKnown.append(String.format(Locale.US, " | %dx %s", countByType.get(abbrType), abbrType));
+			}
+		}
+		g.drawString(sbKnown.toString(), 10, 270);
+		StringBuilder sbGuessed = new StringBuilder("guessed=").append(this.sysmapScannerResult == null ? 0 : this.sysmapScannerResult.getBodies().size());
+		if (this.sysmapScannerResult != null && !this.sysmapScannerResult.getBodies().isEmpty()) {
+			List<SysmapBody> bodiesSortedByValue = this.sysmapScannerResult.getBodies().stream()
+					.sorted((b1, b2) -> -1 * new Long(SysmapBody.estimatePayout(b1, this.nextStarClass)).compareTo(new Long(SysmapBody.estimatePayout(b2, this.nextStarClass))))
+					.collect(Collectors.toList());
+			LinkedHashMap<String, Integer> countByType = new LinkedHashMap<>();
+			for (SysmapBody b : bodiesSortedByValue) {
+				String abbrType = SysmapBody.getAbbreviatedType(b, this.nextStarClass);
+				countByType.put(abbrType, countByType.getOrDefault(abbrType, 0) + 1);
+			}
+			for (String abbrType : countByType.keySet()) {
+				sbGuessed.append(String.format(Locale.US, " | %dx %s", countByType.get(abbrType), abbrType));
+			}
+		}
+		g.drawString(sbGuessed.toString(), 10, 300);
+		StringBuilder sbScanned = new StringBuilder("scanned=").append(this.currentSystemScannedBodies.size()).append("/").append(this.currentSystemNumDiscoveredBodies);
+		if (!this.currentSystemScannedBodies.isEmpty()) {
+			List<ScanEvent> bodiesSortedByValue = this.currentSystemScannedBodies.stream()
+					.sorted((b1, b2) -> -1 * new Long(BodyUtil.estimatePayout(b1)).compareTo(new Long(BodyUtil.estimatePayout(b2)))).collect(Collectors.toList());
+			LinkedHashMap<String, Integer> countByType = new LinkedHashMap<>();
+			for (ScanEvent e : bodiesSortedByValue) {
+				String abbrType = BodyUtil.getAbbreviatedType(e);
+				countByType.put(abbrType, countByType.getOrDefault(abbrType, 0) + 1);
+			}
+			for (String abbrType : countByType.keySet()) {
+				sbScanned.append(String.format(Locale.US, " | %dx %s", countByType.get(abbrType), abbrType));
+			}
+		}
+		g.drawString(sbScanned.toString(), 10, 330);
+
+		g.dispose();
+	}
+
 	private void drawDebugInfoOnImage(BufferedImage debugImage, TemplateMatch compassDotMatch) {
 		Graphics2D g = debugImage.createGraphics();
 
@@ -1703,6 +1788,13 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				this.doEmergencyExit("In danger");
 			} else if (!status.isInSupercruise()) {
 				this.doEmergencyExit("Dropped from supercruise");
+			}
+
+			// FIXME This goes into a debug state
+			if (status.guiFocusFss()) {
+				this.gameState = GameState.DEBUG_FSS;
+			} else {
+				this.gameState = GameState.UNKNOWN;
 			}
 
 			if (status.isFsdCooldown() && !this.fsdCooldown && this.gameState == GameState.WAIT_FOR_FSD_COOLDOWN) {

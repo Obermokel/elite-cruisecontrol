@@ -195,6 +195,10 @@ public class CruiseControlFrame extends JFrame implements WindowListener, KeyLis
 			text.append("<br>").append(status.isInMothership() ? SPAN_ACTIVE : SPAN_INACTIVE).append("In mothership").append(SPAN_CLOSE);
 			text.append("<br>").append(status.isInFighter() ? SPAN_ACTIVE : SPAN_INACTIVE).append("In fighter").append(SPAN_CLOSE);
 			text.append("<br>").append(status.isInSrv() ? SPAN_ACTIVE : SPAN_INACTIVE).append("In SRV").append(SPAN_CLOSE);
+			text.append("<br>").append(status.guiFocusGalaxyMap() ? SPAN_ACTIVE : SPAN_INACTIVE).append("Focus Galaxy Map").append(SPAN_CLOSE);
+			text.append("<br>").append(status.guiFocusSystemMap() ? SPAN_ACTIVE : SPAN_INACTIVE).append("Focus System Map").append(SPAN_CLOSE);
+			text.append("<br>").append(status.guiFocusFss() ? SPAN_ACTIVE : SPAN_INACTIVE).append("Focus FSS").append(SPAN_CLOSE);
+			text.append("<br>").append(status.guiFocusDss() ? SPAN_ACTIVE : SPAN_INACTIVE).append("Focus DSS").append(SPAN_CLOSE);
 
 			if ((status.getLatitude() != null && status.getLongitude() != null) || status.getHeading() != null || status.getAltitude() != null) {
 				text.append("<br>");
