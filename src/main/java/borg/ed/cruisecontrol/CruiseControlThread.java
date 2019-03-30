@@ -419,6 +419,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			if (System.currentTimeMillis() - waitForFsdCooldownSince > 10000) {
 				logger.warn("FSD cooldown not triggered within 10 seconds, getting in scooping range now");
 				this.shipControl.setThrottle(0);
+				this.getInScoopingRangeSince = System.currentTimeMillis();
 				this.gameState = GameState.GET_IN_SCOOPING_RANGE;
 			}
 			break;
@@ -1833,11 +1834,11 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				this.lastScannedBodyAt = System.currentTimeMillis();
 				this.lastScannedBodyDistanceFromArrival = MiscUtil.getAsFloat(scanEvent.getDistanceFromArrivalLS(), 0f);
 				this.shipControl.selectNextSystemInRoute();
+				this.currentSystemScannedBodies.add((ScanEvent) event);
 				if (this.currentSysmapBody != null) {
 					this.shipControl.setThrottle(0);
 					this.shipControl.stopTurning();
 					this.currentSysmapBody.unexplored = false;
-					this.currentSystemScannedBodies.add((ScanEvent) event);
 
 					String scannedBodyType = scanEvent.getPlanetClass();
 					if (StringUtils.isEmpty(scannedBodyType)) {
@@ -1932,29 +1933,48 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 			logger.debug("Found " + candidateSystems.size() + " candidate system(s)");
 
 			List<ValuableSystem> valuableSystems = new ArrayList<>();
+			int nVisited = 0;
+			int nStupidName = 0;
+			int nTooFar = 0;
+			int nNotOnWay = 0;
+			int nNonScoopable = 0;
+			int nMissingStarSystem = 0;
+			int nPopulated = 0;
+			int nNotValuable = 0;
 			for (String candidateSystemName : candidateSystems.keySet()) {
 				if (CruiseControlApplication.myVisitedSystems.contains(candidateSystemName)) {
+					nVisited++;
 					continue;
 				} else if (candidateSystemName.contains("+") || candidateSystemName.contains("(") || candidateSystemName.contains(")")) {
+					nStupidName++;
 					continue;
 				}
 				Coord candidateSystemCoord = candidateSystems.get(candidateSystemName);
 				float distanceToCandidate = myCoord.distanceTo(candidateSystemCoord);
 				if (distanceToCandidate > rangeLy) {
+					nTooFar++;
 					continue; // The ES query uses a box, not direct distance
 				}
 				float candidateDistanceToNextWaypoint = candidateSystemCoord.distanceTo(nextWaypointCoord);
 				float maxAllowedDistance = nextWaypointDistance - (distanceToCandidate / 2); // At least half of the way must be towards our next waypoint
-				if (candidateDistanceToNextWaypoint <= maxAllowedDistance) {
+				if (candidateDistanceToNextWaypoint > maxAllowedDistance) {
+					nNotOnWay++;
+				} else {
 					// Check scoopable
 					List<Body> bodies = this.galaxyService.findBodiesByStarSystemName(candidateSystemName);
 					List<Body> arrivalStars = bodies.stream().filter(b -> b.getStarClass() != null && (b.getDistanceToArrivalLs() == null || b.getDistanceToArrivalLs().floatValue() == 0.0f))
 							.collect(Collectors.toList());
 					boolean nonScoopableArrivalStar = arrivalStars.size() == 1 && !arrivalStars.get(0).getStarClass().isScoopable();
-					if (!nonScoopableArrivalStar) {
+					if (nonScoopableArrivalStar) {
+						nNonScoopable++;
+					} else {
 						// Check population
 						StarSystem starSystem = this.galaxyService.findStarSystemByName(candidateSystemName);
-						if (starSystem != null && starSystem.getPopulation().compareTo(BigDecimal.ZERO) <= 0) {
+						if (starSystem == null) {
+							nMissingStarSystem++;
+						} else if (starSystem.getPopulation().compareTo(BigDecimal.ZERO) > 0) {
+							nPopulated++;
+						} else {
 							List<Body> valuableBodies = bodies.stream()
 									.filter(b -> b.getDistanceToArrivalLs() != null && ((BodyUtil.estimatePayout(b) >= 200000 && b.getDistanceToArrivalLs().intValue() < 23456)
 											|| (BodyUtil.estimatePayout(b) >= 500000 && b.getDistanceToArrivalLs().intValue() < 56789)))
@@ -1963,20 +1983,29 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 							for (Body b : valuableBodies) {
 								payout += BodyUtil.estimatePayout(b);
 							}
-							if (payout >= 1_500_000) {
+							if (payout < 500_000) {
+								//logger.debug(String.format(Locale.US, "%,20d CR: %s", payout, candidateSystemName));
+								nNotValuable++;
+							} else {
 								valuableSystems.add(new ValuableSystem(candidateSystemName, candidateSystemCoord, payout));
 							}
 						}
 					}
 				}
 			}
-			logger.debug("Kept " + valuableSystems.size() + " system(s) which are indeed valuable and on our way");
+			logger.debug("Kept " + valuableSystems.size() + " system(s) which are indeed valuable and on our way" + " (nVisited=" + nVisited + ", nStupidName=" + nStupidName + ", nTooFar="
+					+ nTooFar + ", nNotOnWay=" + nNotOnWay + ", nNonScoopable=" + nNonScoopable + ", nMissingStarSystem=" + nMissingStarSystem + ", nPopulated=" + nPopulated
+					+ ", nNotValuable=" + nNotValuable + ")");
 
-			// Sort by distance, but finally by value
+			// Sort by distance (in 25 ly increments), but finally by value
 			Collections.sort(valuableSystems, new Comparator<ValuableSystem>() {
 				@Override
 				public int compare(ValuableSystem s1, ValuableSystem s2) {
-					return new Float(s1.getCoord().distanceTo(myCoord)).compareTo(new Float(s2.getCoord().distanceTo(myCoord)));
+					Float d1 = new Float(s1.getCoord().distanceTo(myCoord));
+					Float d2 = new Float(s2.getCoord().distanceTo(myCoord));
+					Integer di1 = new Integer(d1.intValue() / 25);
+					Integer di2 = new Integer(d2.intValue() / 25);
+					return di1.compareTo(di2);
 				}
 			});
 			Collections.sort(valuableSystems, new Comparator<ValuableSystem>() {
