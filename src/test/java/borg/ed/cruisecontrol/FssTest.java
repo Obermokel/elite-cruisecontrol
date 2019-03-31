@@ -52,7 +52,9 @@ public class FssTest {
 		FssBodyLocator fssBodyLocator = new FssBodyLocator();
 		fssBodyLocator.refresh(rgb, hsv);
 		fssBodyLocator.writeBlueBubbleImage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_blueBubbles.png")));
-		fssBodyLocator.writeBlurredBubbleImage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_blurredBubbles.png")));
+		fssBodyLocator.writeMiniBubbleImage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_miniBubbles.png")));
+		fssBodyLocator.writeMiniBlurredImage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_miniBlurred.png")));
+		fssBodyLocator.writeDebugImage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_debugLocations.png")));
 	}
 
 	public static class FssBodyLocation {

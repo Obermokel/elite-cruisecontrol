@@ -48,74 +48,6 @@ public class FssSpectrumBar {
 		this.initDebugBackgroundSubimage();
 	}
 
-	private void initDebugBackgroundSubimage() {
-		for (int x = 0; x < WIDTH; x++) {
-			float position = this.xInSubimageToPosition(x);
-			PlanetClass planetClass = this.positionToPlanetClass(position);
-
-			int r = 20;
-			int g = 20;
-			int b = 20;
-			if (planetClass != null) {
-				switch (planetClass) {
-				case METAL_RICH_BODY:
-					r = 66;
-					g = 0;
-					b = 0;
-					break;
-				case HIGH_METAL_CONTENT_BODY:
-					r = 91;
-					g = 0;
-					b = 91;
-					break;
-				case ROCKY_BODY:
-					r = 100;
-					g = 100;
-					b = 100;
-					break;
-				case ICY_BODY:
-					r = 28;
-					g = 111;
-					b = 132;
-					break;
-				case ROCKY_ICY_BODY:
-					r = 113;
-					g = 140;
-					b = 0;
-					break;
-				case EARTHLIKE_BODY:
-					r = 0;
-					g = 83;
-					b = 0;
-					break;
-				case AMMONIA_WORLD:
-					r = 62;
-					g = 62;
-					b = 0;
-					break;
-				case WATER_WORLD:
-					r = 22;
-					g = 27;
-					b = 84;
-					break;
-				case SUDARSKY_CLASS_I_GAS_GIANT:
-					r = 30;
-					g = 18;
-					b = 13;
-					break;
-				default:
-					break;
-				}
-			}
-
-			for (int y = 0; y < HEIGHT; y++) {
-				this.debugBackgroundSubimage.bands[0].unsafe_set(x, y, r / 255f);
-				this.debugBackgroundSubimage.bands[1].unsafe_set(x, y, g / 255f);
-				this.debugBackgroundSubimage.bands[2].unsafe_set(x, y, b / 255f);
-			}
-		}
-	}
-
 	/**
 	 * Scans a new screen capture (given as RGB and HSV images scaled to 1920x1080).
 	 * 
@@ -395,6 +327,74 @@ public class FssSpectrumBar {
 
 	public void writeDebugSubimage(File pngFile) throws IOException {
 		ImageIO.write(ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(this.debugSubimage), null, true), "PNG", pngFile);
+	}
+
+	private void initDebugBackgroundSubimage() {
+		for (int x = 0; x < WIDTH; x++) {
+			float position = this.xInSubimageToPosition(x);
+			PlanetClass planetClass = this.positionToPlanetClass(position);
+
+			int r = 20;
+			int g = 20;
+			int b = 20;
+			if (planetClass != null) {
+				switch (planetClass) {
+				case METAL_RICH_BODY:
+					r = 66;
+					g = 0;
+					b = 0;
+					break;
+				case HIGH_METAL_CONTENT_BODY:
+					r = 91;
+					g = 0;
+					b = 91;
+					break;
+				case ROCKY_BODY:
+					r = 100;
+					g = 100;
+					b = 100;
+					break;
+				case ICY_BODY:
+					r = 28;
+					g = 111;
+					b = 132;
+					break;
+				case ROCKY_ICY_BODY:
+					r = 113;
+					g = 140;
+					b = 0;
+					break;
+				case EARTHLIKE_BODY:
+					r = 0;
+					g = 83;
+					b = 0;
+					break;
+				case AMMONIA_WORLD:
+					r = 62;
+					g = 62;
+					b = 0;
+					break;
+				case WATER_WORLD:
+					r = 22;
+					g = 27;
+					b = 84;
+					break;
+				case SUDARSKY_CLASS_I_GAS_GIANT:
+					r = 30;
+					g = 18;
+					b = 13;
+					break;
+				default:
+					break;
+				}
+			}
+
+			for (int y = 0; y < HEIGHT; y++) {
+				this.debugBackgroundSubimage.bands[0].unsafe_set(x, y, r / 255f);
+				this.debugBackgroundSubimage.bands[1].unsafe_set(x, y, g / 255f);
+				this.debugBackgroundSubimage.bands[2].unsafe_set(x, y, b / 255f);
+			}
+		}
 	}
 
 }

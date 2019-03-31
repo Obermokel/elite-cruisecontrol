@@ -247,7 +247,7 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 				// >>>> DEBUG IMAGE >>>>
 				if (CruiseControlApplication.SHOW_LIVE_DEBUG_IMAGE) {
 					if (gameState == GameState.DEBUG_FSS) {
-						this.drawFssDebugImage(debugImage, this.fssSpectrumBar, this.fssBodyLocator);
+						this.drawFssDebugImage(debugImage, blueWhiteHudImage, this.fssSpectrumBar, this.fssBodyLocator);
 						this.drawFssDebugInfo(debugImage);
 					} else {
 						this.drawColoredDebugImage(debugImage, orangeHudImage, yellowHudImage, blueWhiteHudImage, redHudImage, brightImage);
@@ -1492,13 +1492,29 @@ public class CruiseControlThread extends Thread implements JournalUpdateListener
 		}
 	}
 
-	private void drawFssDebugImage(BufferedImage debugImage, FssSpectrumBar fssSpectrumBar, FssBodyLocator fssBodyLocator) {
-		BufferedImage spectrumBarDebugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(fssSpectrumBar.getDebugSubimage()), null, true);
+	private void drawFssDebugImage(BufferedImage debugImage, GrayF32 blueWhiteHudImage, FssSpectrumBar fssSpectrumBar, FssBodyLocator fssBodyLocator) {
+		for (int y = 0; y < debugImage.getHeight(); y++) {
+			for (int x = 0; x < debugImage.getWidth(); x++) {
+				float bw = blueWhiteHudImage.unsafe_get(x, y) * 255;
+				if (bw > 0) {
+					debugImage.setRGB(x, y, new Color((int) (bw * 0.66f), (int) (bw * 0.66f), (int) bw).getRGB());
+				} else {
+					debugImage.setRGB(x, y, new Color(0, 0, 0).getRGB());
+				}
+			}
+		}
 
+		BufferedImage spectrumBarDebugImage = ConvertBufferedImage.convertTo_F32(ImageUtil.denormalize255(fssSpectrumBar.getDebugSubimage()), null, true);
 		Graphics2D g = debugImage.createGraphics();
-		g.setColor(Color.BLACK);
-		g.fillRect(0, 0, 1920, 1080);
 		g.drawImage(spectrumBarDebugImage, FssSpectrumBar.X_OFFSET, FssSpectrumBar.Y_OFFSET, null);
+
+		g.setColor(Color.RED);
+		g.setFont(new Font("Sans Serif", Font.BOLD, 24));
+		for (TemplateMatch m : fssBodyLocator.getBubbleMatches()) {
+			g.drawRect(m.getX() * 10, m.getY() * 10, m.getWidth() * 10, m.getHeight() * 10);
+			g.drawString(String.format(Locale.US, "%.6f", m.getErrorPerPixel()), m.getX() * 10, m.getY() * 10 - 2);
+		}
+
 		g.dispose();
 	}
 

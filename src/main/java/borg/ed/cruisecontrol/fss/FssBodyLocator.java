@@ -1,21 +1,36 @@
 package borg.ed.cruisecontrol.fss;
 
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.stream.Collectors;
 
 import javax.imageio.ImageIO;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import boofcv.abst.distort.FDistort;
 import boofcv.alg.filter.blur.GBlurImageOps;
+import boofcv.alg.interpolate.InterpolationType;
 import boofcv.io.image.ConvertBufferedImage;
 import boofcv.struct.image.GrayF32;
 import boofcv.struct.image.Planar;
+import borg.ed.cruisecontrol.templatematching.Template;
+import borg.ed.cruisecontrol.templatematching.TemplateMatch;
+import borg.ed.cruisecontrol.templatematching.TemplateMatcher;
 import borg.ed.cruisecontrol.util.ImageUtil;
 
 /**
  * <p>Scans the entire screen for glowing bubbles, allowing to give direction hints.</p>
+ * <p>Also scans for the reticules, allowing for even more precise navigation hints.</p>
  * 
  * <p>
  * Trivia:<br>
@@ -32,8 +47,20 @@ public class FssBodyLocator {
 	private Planar<GrayF32> scaledRgbImage = new Planar<>(GrayF32.class, 1920, 1080, 3);
 	private Planar<GrayF32> scaledHsvImage = new Planar<>(GrayF32.class, 1920, 1080, 3);
 	private GrayF32 blueBubbleImage = new GrayF32(1920, 1080);
-	private GrayF32 workBlur = new GrayF32(1920, 1080);
-	private GrayF32 blurredBubbleImage = new GrayF32(1920, 1080);
+	private GrayF32 miniBubbleImage = new GrayF32(192, 108);
+	private GrayF32 workBlur = new GrayF32(192, 108);
+	private GrayF32 miniBlurredImage = new GrayF32(192, 108);
+	private Template tBlurredMiniBubble = null;
+	private List<TemplateMatch> bubbleMatches = new ArrayList<>();
+	private BufferedImage debugImage = null;
+
+	public FssBodyLocator() {
+		try {
+			this.tBlurredMiniBubble = Template.fromFile(new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/blurredMiniBubble.png"));
+		} catch (IOException e) {
+			throw new RuntimeException("Failed to initialize " + this, e);
+		}
+	}
 
 	/**
 	 * Scans a new screen capture (given as RGB and HSV images scaled to 1920x1080).
@@ -48,7 +75,10 @@ public class FssBodyLocator {
 		this.scaledHsvImage = scaledHsvImage;
 
 		this.refreshBlueBubbleImage();
-		this.refreshBlurredBubbleImage();
+		this.refreshMiniBubbleImage();
+		this.refreshMiniBlurredImage();
+		this.refreshBodyLocations();
+		this.refreshDebugImage();
 	}
 
 	private void refreshBlueBubbleImage() {
@@ -75,8 +105,41 @@ public class FssBodyLocator {
 		}
 	}
 
-	private void refreshBlurredBubbleImage() {
-		GBlurImageOps.gaussian(this.blueBubbleImage, this.blurredBubbleImage, -1, 3, this.workBlur);
+	private void refreshMiniBubbleImage() {
+		new FDistort().input(this.blueBubbleImage).output(this.miniBubbleImage).interp(InterpolationType.BICUBIC).scaleExt().apply();
+	}
+
+	private void refreshMiniBlurredImage() {
+		GBlurImageOps.gaussian(this.miniBubbleImage, this.miniBlurredImage, -1, 3, this.workBlur);
+	}
+
+	private void refreshBodyLocations() {
+		List<TemplateMatch> allMatches = TemplateMatcher.findAllMatchingLocations(this.miniBlurredImage, this.tBlurredMiniBubble, 0.1f);
+		allMatches = allMatches.stream().sorted((m1, m2) -> new Float(m1.getErrorPerPixel()).compareTo(new Float(m2.getErrorPerPixel()))).collect(Collectors.toList());
+		//logger.debug("allMatches = " + allMatches.size());
+		this.bubbleMatches = new ArrayList<>();
+		List<Rectangle> rects = new ArrayList<>();
+		for (TemplateMatch m : allMatches) {
+			Rectangle r = new Rectangle(m.getX(), m.getY(), m.getWidth(), m.getHeight());
+			if (!intersectsWithAny(r, rects)) {
+				rects.add(r);
+				this.bubbleMatches.add(m);
+				//logger.debug(String.format(Locale.US, "%s = %.6f", m.getTemplate().getName(), m.getErrorPerPixel()));
+			}
+		}
+	}
+
+	private void refreshDebugImage() {
+		this.debugImage = ImageUtil.scaleTo(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.miniBlurredImage), null, true), 1920, 1080);
+
+		Graphics2D g = this.debugImage.createGraphics();
+		g.setColor(Color.RED);
+		g.setFont(new Font("Sans Serif", Font.BOLD, 24));
+		for (TemplateMatch m : this.bubbleMatches) {
+			g.drawRect(m.getX() * 10, m.getY() * 10, m.getWidth() * 10, m.getHeight() * 10);
+			g.drawString(String.format(Locale.US, "%.6f", m.getErrorPerPixel()), m.getX() * 10, m.getY() * 10 - 2);
+		}
+		g.dispose();
 	}
 
 	public GrayF32 getBlueBubbleImage() {
@@ -87,12 +150,41 @@ public class FssBodyLocator {
 		ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.blueBubbleImage), null, true), "PNG", pngFile);
 	}
 
-	public GrayF32 getBlurredBubbleImage() {
-		return this.blurredBubbleImage;
+	public GrayF32 getMiniBubbleImage() {
+		return this.miniBubbleImage;
 	}
 
-	public void writeBlurredBubbleImage(File pngFile) throws IOException {
-		ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.blurredBubbleImage), null, true), "PNG", pngFile);
+	public void writeMiniBubbleImage(File pngFile) throws IOException {
+		ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.miniBubbleImage), null, true), "PNG", pngFile);
+	}
+
+	public GrayF32 getMiniBlurredImage() {
+		return this.miniBlurredImage;
+	}
+
+	public void writeMiniBlurredImage(File pngFile) throws IOException {
+		ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.miniBlurredImage), null, true), "PNG", pngFile);
+	}
+
+	public List<TemplateMatch> getBubbleMatches() {
+		return this.bubbleMatches;
+	}
+
+	public BufferedImage getDebugImage() {
+		return this.debugImage;
+	}
+
+	public void writeDebugImage(File pngFile) throws IOException {
+		ImageIO.write(this.debugImage, "PNG", pngFile);
+	}
+
+	private static boolean intersectsWithAny(Rectangle rect, List<Rectangle> rects) {
+		for (Rectangle other : rects) {
+			if (rect.intersects(other)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 }
