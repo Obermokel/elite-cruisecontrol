@@ -25,6 +25,7 @@ public class FssTest {
 		File testDir = new File(System.getProperty("user.home"), "Pictures\\FSS");
 
 		testFile(new File(testDir, "spectrum and glow.png"));
+		testFile(new File(testDir, "circle indicator.png"));
 	}
 
 	static void testFile(File testFile) throws IOException {
@@ -46,23 +47,17 @@ public class FssTest {
 		fssSpectrumBar.refresh(rgb, hsv);
 		//fssSpectrumBar.writeWhiteIndicatorSubimage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_whiteIndicator.png")));
 		//fssSpectrumBar.writeBlueSpectrumSubimage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_blueSpectrum.png")));
-		fssSpectrumBar.writeDebugSubimage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_debug.png")));
+		//fssSpectrumBar.writeDebugSubimage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_debug.png")));
 
 		// FSS bodies
 		FssBodyLocator fssBodyLocator = new FssBodyLocator();
 		fssBodyLocator.refresh(rgb, hsv);
-		fssBodyLocator.writeBlueBubbleImage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_blueBubbles.png")));
-		fssBodyLocator.writeMiniBubbleImage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_miniBubbles.png")));
-		fssBodyLocator.writeMiniBlurredImage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_miniBlurred.png")));
-		fssBodyLocator.writeDebugImage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_debugLocations.png")));
-	}
-
-	public static class FssBodyLocation {
-
-		public float x = 0;
-		public float y = 0;
-		public long lastSeen = 0;
-
+		//fssBodyLocator.writeBlueBubbleImage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_blueBubbles.png")));
+		//fssBodyLocator.writeMiniBubbleImage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_miniBubbles.png")));
+		//fssBodyLocator.writeMiniBlurredImage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_miniBlurred.png")));
+		fssBodyLocator.writeWhiteReticuleSubimage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_whiteReticule.png")));
+		fssBodyLocator.writeBlurredReticuleSubimage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_blurredReticule.png")));
+		//fssBodyLocator.writeDebugImage(new File(testFile.getParentFile(), testFile.getName().replace(".png", "_debugLocations.png")));
 	}
 
 }

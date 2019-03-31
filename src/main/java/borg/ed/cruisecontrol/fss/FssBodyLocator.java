@@ -9,6 +9,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
@@ -43,20 +44,35 @@ public class FssBodyLocator {
 
 	static final Logger logger = LoggerFactory.getLogger(FssBodyLocator.class);
 
+	// Reticule coordinates in 1920x1080
+	public static final int X_OFFSET = 892;
+	public static final int Y_OFFSET = 472;
+	public static final int X_END = 1028;
+	public static final int Y_END = 608;
+	public static final int WIDTH = X_END - X_OFFSET;
+	public static final int HEIGHT = Y_END - Y_OFFSET;
+
 	@SuppressWarnings("unused")
 	private Planar<GrayF32> scaledRgbImage = new Planar<>(GrayF32.class, 1920, 1080, 3);
 	private Planar<GrayF32> scaledHsvImage = new Planar<>(GrayF32.class, 1920, 1080, 3);
 	private GrayF32 blueBubbleImage = new GrayF32(1920, 1080);
 	private GrayF32 miniBubbleImage = new GrayF32(192, 108);
-	private GrayF32 workBlur = new GrayF32(192, 108);
+	private GrayF32 workBlurScreen = new GrayF32(192, 108);
 	private GrayF32 miniBlurredImage = new GrayF32(192, 108);
 	private Template tBlurredMiniBubble = null;
 	private List<TemplateMatch> bubbleMatches = new ArrayList<>();
+	private GrayF32 whiteReticuleSubimage = new GrayF32(WIDTH, HEIGHT);
+	private GrayF32 workBlurReticule = new GrayF32(WIDTH, HEIGHT);
+	private GrayF32 blurredReticuleSubimage = new GrayF32(WIDTH, HEIGHT);
+	private Template tBlurredReticule = null;
+	private TemplateMatch mBlurredReticule = null;
+	private List<FssBodyLocation> bodyLocations = new ArrayList<>();
 	private BufferedImage debugImage = null;
 
 	public FssBodyLocator() {
 		try {
 			this.tBlurredMiniBubble = Template.fromFile(new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/blurredMiniBubble.png"));
+			this.tBlurredReticule = Template.fromFile(new File(System.getProperty("user.home"), "Google Drive/Elite Dangerous/CruiseControl/ref/blurredFssReticule.png"));
 		} catch (IOException e) {
 			throw new RuntimeException("Failed to initialize " + this, e);
 		}
@@ -77,6 +93,7 @@ public class FssBodyLocator {
 		this.refreshBlueBubbleImage();
 		this.refreshMiniBubbleImage();
 		this.refreshMiniBlurredImage();
+		this.refreshWhiteReticuleSubimage();
 		this.refreshBodyLocations();
 		this.refreshDebugImage();
 	}
@@ -110,10 +127,31 @@ public class FssBodyLocator {
 	}
 
 	private void refreshMiniBlurredImage() {
-		GBlurImageOps.gaussian(this.miniBubbleImage, this.miniBlurredImage, -1, 3, this.workBlur);
+		GBlurImageOps.gaussian(this.miniBubbleImage, this.miniBlurredImage, -1, 3, this.workBlurScreen);
+	}
+
+	private void refreshWhiteReticuleSubimage() {
+		Planar<GrayF32> hsvSubimage = this.scaledHsvImage.subimage(X_OFFSET, Y_OFFSET, X_END, Y_END);
+
+		for (int y = 0; y < hsvSubimage.height; y++) {
+			for (int x = 0; x < hsvSubimage.width; x++) {
+				//float h = hsvSubimage.bands[0].unsafe_get(x, y);
+				float s = hsvSubimage.bands[1].unsafe_get(x, y);
+				float v = hsvSubimage.bands[2].unsafe_get(x, y);
+
+				if (v >= 0.4f && s <= 0.1f) {
+					whiteReticuleSubimage.unsafe_set(x, y, Math.min(1.0f, v * 2.0f));
+				} else {
+					whiteReticuleSubimage.unsafe_set(x, y, 0);
+				}
+			}
+		}
+
+		GBlurImageOps.gaussian(this.whiteReticuleSubimage, this.blurredReticuleSubimage, -1, 3, this.workBlurReticule);
 	}
 
 	private void refreshBodyLocations() {
+		// Template match for blue bubbles
 		List<TemplateMatch> allMatches = TemplateMatcher.findAllMatchingLocations(this.miniBlurredImage, this.tBlurredMiniBubble, 0.1f);
 		allMatches = allMatches.stream().sorted((m1, m2) -> new Float(m1.getErrorPerPixel()).compareTo(new Float(m2.getErrorPerPixel()))).collect(Collectors.toList());
 		//logger.debug("allMatches = " + allMatches.size());
@@ -124,7 +162,20 @@ public class FssBodyLocator {
 			if (!intersectsWithAny(r, rects)) {
 				rects.add(r);
 				this.bubbleMatches.add(m);
+				this.bodyLocations.add(FssBodyLocation.fromBubble(m));
 				//logger.debug(String.format(Locale.US, "%s = %.6f", m.getTemplate().getName(), m.getErrorPerPixel()));
+			}
+		}
+
+		// TODO Template match for the white reticule
+
+		// Remove outdated body locations
+		final long now = System.currentTimeMillis();
+		ListIterator<FssBodyLocation> it = this.bodyLocations.listIterator();
+		while (it.hasNext()) {
+			FssBodyLocation l = it.next();
+			if (now - l.lastSeen > 2500) {
+				it.remove();
 			}
 		}
 	}
@@ -168,6 +219,26 @@ public class FssBodyLocator {
 
 	public List<TemplateMatch> getBubbleMatches() {
 		return this.bubbleMatches;
+	}
+
+	public GrayF32 getWhiteReticuleSubimage() {
+		return this.whiteReticuleSubimage;
+	}
+
+	public void writeWhiteReticuleSubimage(File pngFile) throws IOException {
+		ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.whiteReticuleSubimage), null, true), "PNG", pngFile);
+	}
+
+	public GrayF32 getBlurredReticuleSubimage() {
+		return this.blurredReticuleSubimage;
+	}
+
+	public void writeBlurredReticuleSubimage(File pngFile) throws IOException {
+		ImageIO.write(ConvertBufferedImage.convertTo(ImageUtil.denormalize255(this.blurredReticuleSubimage), null, true), "PNG", pngFile);
+	}
+
+	public List<FssBodyLocation> getBodyLocations() {
+		return this.bodyLocations;
 	}
 
 	public BufferedImage getDebugImage() {
